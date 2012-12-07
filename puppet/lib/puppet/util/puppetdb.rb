@@ -1,6 +1,7 @@
 require 'puppet/util'
+require 'puppet/util/logging'
 require 'puppet/util/puppetdb/char_encoding'
-require 'digest'
+require 'digest/sha1'
 require 'time'
 require 'fileutils'
 
@@ -31,6 +32,17 @@ module Puppet::Util::Puppetdb
       CommandReplaceFacts   => :facts,
       CommandStoreReport    => :reports,
   }
+
+  ## HACK: the existing `http_*` methods and the
+  # `Puppet::Util::PuppetDb#submit_command` expect their first argument to
+  # be a "request" object (which is typically an instance of
+  # `Puppet::Indirector::Request`), but really all they use it for is to check
+  # it for attributes called `server`, `port`, and `key`.  Since we don't have,
+  # want, or need an instance of `Indirector::Request` in many cases, we will use
+  # this hacky struct to comply with the existing "API".
+  BunkRequest = Struct.new(:server, :port, :key)
+
+  Command = Struct.new(:command, :certname, :payload, :checksum)
 
   # Public class methods and magic voodoo
 
@@ -75,20 +87,18 @@ module Puppet::Util::Puppetdb
 
   # Public instance methods
 
-  def submit_command(request, command_payload, command, version)
-    message = format_command(command_payload, command, version)
+  def submit_command(request, command_payload, command_name, version)
+    message = format_command(command_payload, command_name, version)
     checksum = Digest::SHA1.hexdigest(message)
+    command = Command.new(command_name, request.key, message, checksum)
 
-    spool = config.has_key?(command) ? config[command][:spool] : false
+    spool = config.has_key?(command_name) ? config[command_name][:spool] : false
 
     if (spool)
-      vardir = Puppet[:vardir]
-      command_dir = File.join(vardir, CommandsSpoolDir)
-      FileUtils.mkdir_p(command_dir)
-      enqueue_command(command_dir, request.key, command, message, checksum)
-      flush_commands(command_dir, request)
+      enqueue_command(command_dir, command)
+      flush_commands(command_dir)
     else
-      submit_single_command(request, command, message, checksum)
+      submit_single_command(command)
     end
   end
 
@@ -174,40 +184,58 @@ module Puppet::Util::Puppetdb
     CharEncoding.utf8_string(message)
   end
 
-  def enqueue_command(command_dir, certname, command, message, checksum)
-    #checksum = Digest::SHA1.hexdigest(message)
-    file_path = File.join(command_dir, "#{certname}_#{checksum}.command")
-    File.open(file_path, "w") do |f|
-      f.puts(command)
-      f.puts(checksum)
-      f.write(message)
-    end
-    Puppet.info("Spooled PuppetDB command for node '#{certname}' to file: '#{file_path}'")
+  def command_dir
+    dir = File.join(Puppet[:vardir], CommandsSpoolDir)
+    FileUtils.mkdir_p(dir)
+    dir
   end
 
-  def flush_commands(command_dir, request)
+  def command_file_name(command)
+    "#{command.certname}_#{command.checksum}.command"
+  end
+
+  def load_command(command_file_path)
+    rv = Command.new
+    File.open(command_file_path, "r") do |f|
+      rv.certname = f.readline.strip
+      rv.command = f.readline.strip
+      rv.checksum = f.readline.strip
+      rv.payload = f.read
+    end
+    rv
+  end
+
+  def enqueue_command(command_dir, command)
+    file_path = File.join(command_dir, command_file_name(command))
+
+    File.open(file_path, "w") do |f|
+      f.puts(command.certname)
+      f.puts(command.command)
+      f.puts(command.checksum)
+      f.write(command.payload)
+    end
+    Puppet.notice("Spooled PuppetDB command for node '#{command.certname}' to file: '#{file_path}'")
+  end
+
+  def flush_commands(command_dir)
     Dir.glob(File.join(command_dir, "*.command")).each do |command_file_path|
       begin
-        File.open(command_file_path, "r") do |f|
-          command = f.readline
-          checksum = f.readline
-          submit_single_command(request, command, f.read, checksum)
-          # If we get here, the command was submitted successfully so we can
-          # clean up the file from vardir.
-        end
+        command = load_command(command_file_path)
+
+        submit_single_command(command)
+        # If we get here, the command was submitted successfully so we can
+        # clean up the file from vardir.
         File.delete(command_file_path)
       rescue => e
-        Puppet.error("Failed to submit command to PuppetDB; command saved to file '#{f.absolute_path}'.  Queued for retry.")
+        Puppet.err("Failed to submit command to PuppetDB; command saved to file '#{command_file_path}'.  Queued for retry.")
       end
     end
   end
 
-  def submit_single_command(request, command, message, checksum)
-    #checksum = Digest::SHA1.hexdigest(message)
+  def submit_single_command(command)
+    payload = CGI.escape(command.payload)
 
-    payload = CGI.escape(message)
-
-    for_whom = " for #{request.key}" if request.key
+    for_whom = " for #{command.certname}" if command.certname
 
     begin
       # TODO: This line introduces a requirement that any class that mixes in this
@@ -219,13 +247,14 @@ module Puppet::Util::Puppetdb
       #
       # and has been fixed in Puppet 3.0, so we can clean this up as soon we no longer need to maintain
       # backward-compatibity with older versions of Puppet.
-      response = http_post(request, CommandsUrl, "checksum=#{checksum}&payload=#{payload}", headers)
+      request = BunkRequest.new(config[:server], config[:port], command.certname)
+      response = http_post(request, CommandsUrl, "checksum=#{command.checksum}&payload=#{payload}", headers)
 
       log_x_deprecation_header(response)
 
       if response.is_a? Net::HTTPSuccess
         result = PSON.parse(response.body)
-        Puppet.info "'#{command}' command#{for_whom} submitted to PuppetDB with UUID #{result['uuid']}"
+        Puppet.info "'#{command.command}' command#{for_whom} submitted to PuppetDB with UUID #{result['uuid']}"
         result
       else
         # Newline characters cause an HTTP error, so strip them
@@ -237,7 +266,7 @@ module Puppet::Util::Puppetdb
       #  compatibility.)  We should either be using a nested exception or calling
       #  Puppet::Util::Logging#log_exception or #log_and_raise here; w/o them
       #  we lose context as to where the original exception occurred.
-      raise Puppet::Error, "Failed to submit '#{command}' command#{for_whom} to PuppetDB at #{self.class.server}:#{self.class.port}: #{e}"
+      raise Puppet::Error, "Failed to submit '#{command.command}' command#{for_whom} to PuppetDB at #{self.class.server}:#{self.class.port}: #{e}"
     end
   end
 

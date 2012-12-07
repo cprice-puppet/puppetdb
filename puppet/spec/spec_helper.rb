@@ -8,9 +8,12 @@ require 'rspec'
 require 'puppetlabs_spec_helper/puppet_spec_helper'
 require 'tmpdir'
 require 'fileutils'
+require 'puppet'
+require 'puppet/util/log'
 
 
 RSpec.configure do |config|
+
   config.before :all do
     # Now that we are spooling commands to disk, we need to set up a temp dir
     # where we can safely write them.
@@ -21,6 +24,14 @@ RSpec.configure do |config|
     # Puppet's spec_helper clears settings after each test, so we need to reset
     # the vardir to point to our tmpdir
     Puppet[:vardir] = $puppetdb_tmp_vardir
+
+    @logs = []
+    Puppet::Util::Log.newdestination(Puppet::Test::LogCollector.new(@logs))
+
+    def test_logs
+      @logs.map(&:message)
+    end
+
   end
 
   config.after :each do

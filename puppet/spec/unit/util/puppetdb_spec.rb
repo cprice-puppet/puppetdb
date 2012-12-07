@@ -2,7 +2,7 @@
 # encoding: UTF-8
 
 require 'spec_helper'
-
+require 'digest/sha1'
 require 'puppet/util/puppetdb'
 
 # Create a local copy of these constants so that we don't have to refer to them
@@ -10,6 +10,9 @@ require 'puppet/util/puppetdb'
 CommandReplaceCatalog   = Puppet::Util::Puppetdb::CommandReplaceCatalog
 CommandReplaceFacts     = Puppet::Util::Puppetdb::CommandReplaceFacts
 CommandStoreReport      = Puppet::Util::Puppetdb::CommandStoreReport
+
+Command                 = Puppet::Util::Puppetdb::Command
+
 
 describe Puppet::Util::Puppetdb do
   subject { Object.new.extend described_class }
@@ -154,57 +157,73 @@ CONF
     end
   end
 
-  describe "#enqueue_command" do
-    it "should write the command to a file and log a message" do
-      fail
-    end
-  end
+  describe "spooling commands" do
 
-  describe "#flush_commands" do
-    context "when there are no files in the directory" do
-      it "should fail" do
-        fail
+    let(:command_dir)    { subject.send(:command_dir) }
+    let(:certname)       { 'foo.localdomain' }
+    let(:command_name)   { "OPEN SESAME" }
+    let(:payload)        { "{'resistance': 'futile', 'opinion': 'irrelevant'}" }
+    let(:checksum)       { Digest::SHA1.hexdigest(payload) }
+    let(:command)        { Command.new(command_name, certname, payload, checksum) }
+
+    describe "#enqueue_command" do
+      it "should write the command to a file and log a message" do
+        subject.send(:enqueue_command, command_dir, command)
+        test_logs.find{|m| m =~ /Spooled PuppetDB command.*to file/}.should_not be_nil
+        command_file_name = subject.send(:command_file_name, command)
+        command_file_path = File.join(command_dir, command_file_name)
+        File.exist?(command_file_path).should == true
+        spooled_command = subject.send(:load_command, command_file_path)
+        spooled_command.should == command
       end
     end
 
-    context "when there are files in the directory" do
-      context "when the commands can all be submitted successfully" do
-        it "should submit each command, log a message, and delete the files" do
+    describe "#flush_commands" do
+      context "when there are no files in the directory" do
+        it "should fail" do
           fail
         end
       end
 
-      context "when some of the commands cannot be submitted successfully" do
-        it "should submit each command, log successes and failures, and delete only the successful files" do
+      context "when there are files in the directory" do
+        context "when the commands can all be submitted successfully" do
+          it "should submit each command, log a message, and delete the files" do
+            fail
+          end
+        end
+
+        context "when some of the commands cannot be submitted successfully" do
+          it "should submit each command, log successes and failures, and delete only the successful files" do
+            fail
+          end
+        end
+      end
+    end
+
+    describe "#submit_single_command" do
+      context "when the submission succeeds" do
+        it "should issue the HTTP POST and log success" do
+          fail
+        end
+      end
+
+      context "when the submission fails" do
+        it "should issue the HTTP POST and raise an error" do
           fail
         end
       end
     end
-  end
 
-  describe "#submit_single_command" do
-    context "when the submission succeeds" do
-      it "should issue the HTTP POST and log success" do
-        fail
+    describe "#submit_command" do
+      context "when the command is set to spool" do
+        it "should enqueue the command and then flush" do
+          fail
+        end
       end
-    end
-
-    context "when the submission fails" do
-      it "should issue the HTTP POST and raise an error" do
-        fail
-      end
-    end
-  end
-
-  describe "#submit_command" do
-    context "when the command is set to spool" do
-      it "should enqueue the command and then flush" do
-        fail
-      end
-    end
-    context "when the command is set *not* to spool" do
-      it "should simply submit the command, and not enqueue or flush" do
-        fail
+      context "when the command is set *not* to spool" do
+        it "should simply submit the command, and not enqueue or flush" do
+          fail
+        end
       end
     end
   end
