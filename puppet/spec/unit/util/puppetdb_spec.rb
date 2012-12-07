@@ -14,7 +14,7 @@ CommandStoreReport      = Puppet::Util::Puppetdb::CommandStoreReport
 describe Puppet::Util::Puppetdb do
   subject { Object.new.extend described_class }
 
-  describe ".load_puppetdb_config" do
+  describe "#load_puppetdb_config" do
     let(:confdir) do
       temp = Tempfile.new('confdir')
       path = temp.path
@@ -151,6 +151,61 @@ CONF
         end
       end
 
+    end
+  end
+
+  describe "#enqueue_command" do
+    it "should write the command to a file and log a message" do
+      fail
+    end
+  end
+
+  describe "#flush_commands" do
+    context "when there are no files in the directory" do
+      it "should fail" do
+        fail
+      end
+    end
+
+    context "when there are files in the directory" do
+      context "when the commands can all be submitted successfully" do
+        it "should submit each command, log a message, and delete the files" do
+          fail
+        end
+      end
+
+      context "when some of the commands cannot be submitted successfully" do
+        it "should submit each command, log successes and failures, and delete only the successful files" do
+          fail
+        end
+      end
+    end
+  end
+
+  describe "#submit_single_command" do
+    context "when the submission succeeds" do
+      it "should issue the HTTP POST and log success" do
+        fail
+      end
+    end
+
+    context "when the submission fails" do
+      it "should issue the HTTP POST and raise an error" do
+        fail
+      end
+    end
+  end
+
+  describe "#submit_command" do
+    context "when the command is set to spool" do
+      it "should enqueue the command and then flush" do
+        fail
+      end
+    end
+    context "when the command is set *not* to spool" do
+      it "should simply submit the command, and not enqueue or flush" do
+        fail
+      end
     end
   end
 

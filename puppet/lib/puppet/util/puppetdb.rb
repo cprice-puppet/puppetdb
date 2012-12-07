@@ -22,6 +22,8 @@ module Puppet::Util::Puppetdb
   CommandDeactivateNode   = "deactivate node"
   CommandStoreReport      = "store report"
 
+  CommandsSpoolDir        = File.join("puppetdb", "commands")
+
   # a map for looking up config file section names that correspond to our
   # individual commands
   CommandsConfigSectionNames = {
@@ -75,42 +77,18 @@ module Puppet::Util::Puppetdb
 
   def submit_command(request, command_payload, command, version)
     message = format_command(command_payload, command, version)
-
     checksum = Digest::SHA1.hexdigest(message)
 
-    payload = CGI.escape(message)
+    spool = config.has_key?(command) ? config[command][:spool] : false
 
-    for_whom = " for #{request.key}" if request.key
-
-    begin
-      # TODO: This line introduces a requirement that any class that mixes in this
-      # module must either be a subclass of `Puppet::Indirector::REST`, or
-      # implement its own compatible `#http_post` method, which, unfortunately,
-      # is not likely to have the same error handling functionality as the
-      # one in the REST class.  This was addressed in the following Puppet ticket:
-      #  http://projects.puppetlabs.com/issues/15975
-      #
-      # and has been fixed in Puppet 3.0, so we can clean this up as soon we no longer need to maintain
-      # backward-compatibity with older versions of Puppet.
-      response = http_post(request, CommandsUrl, "checksum=#{checksum}&payload=#{payload}", headers)
-
-      log_x_deprecation_header(response)
-
-      if response.is_a? Net::HTTPSuccess
-        result = PSON.parse(response.body)
-        Puppet.info "'#{command}' command#{for_whom} submitted to PuppetDB with UUID #{result['uuid']}"
-        result
-      else
-        # Newline characters cause an HTTP error, so strip them
-        raise "[#{response.code} #{response.message}] #{response.body.gsub(/[\r\n]/, '')}"
-      end
-    rescue => e
-      # TODO: Use new exception handling methods from Puppet 3.0 here as soon as
-      #  we are able to do so (can't call them yet w/o breaking backwards
-      #  compatibility.)  We should either be using a nested exception or calling
-      #  Puppet::Util::Logging#log_exception or #log_and_raise here; w/o them
-      #  we lose context as to where the original exception occurred.
-      raise Puppet::Error, "Failed to submit '#{command}' command#{for_whom} to PuppetDB at #{self.class.server}:#{self.class.port}: #{e}"
+    if (spool)
+      vardir = Puppet[:vardir]
+      command_dir = File.join(vardir, CommandsSpoolDir)
+      FileUtils.mkdir_p(command_dir)
+      enqueue_command(command_dir, request.key, command, message, checksum)
+      flush_commands(command_dir, request)
+    else
+      submit_single_command(request, command, message, checksum)
     end
   end
 
@@ -182,6 +160,10 @@ module Puppet::Util::Puppetdb
 
   ## Private instance methods
 
+  def config
+    Puppet::Util::Puppetdb.config
+  end
+
   def format_command(payload, command, version)
     message = {
         :command => command,
@@ -191,6 +173,74 @@ module Puppet::Util::Puppetdb
 
     CharEncoding.utf8_string(message)
   end
+
+  def enqueue_command(command_dir, certname, command, message, checksum)
+    #checksum = Digest::SHA1.hexdigest(message)
+    file_path = File.join(command_dir, "#{certname}_#{checksum}.command")
+    File.open(file_path, "w") do |f|
+      f.puts(command)
+      f.puts(checksum)
+      f.write(message)
+    end
+    Puppet.info("Spooled PuppetDB command for node '#{certname}' to file: '#{file_path}'")
+  end
+
+  def flush_commands(command_dir, request)
+    Dir.glob(File.join(command_dir, "*.command")).each do |command_file_path|
+      begin
+        File.open(command_file_path, "r") do |f|
+          command = f.readline
+          checksum = f.readline
+          submit_single_command(request, command, f.read, checksum)
+          # If we get here, the command was submitted successfully so we can
+          # clean up the file from vardir.
+        end
+        File.delete(command_file_path)
+      rescue => e
+        Puppet.error("Failed to submit command to PuppetDB; command saved to file '#{f.absolute_path}'.  Queued for retry.")
+      end
+    end
+  end
+
+  def submit_single_command(request, command, message, checksum)
+    #checksum = Digest::SHA1.hexdigest(message)
+
+    payload = CGI.escape(message)
+
+    for_whom = " for #{request.key}" if request.key
+
+    begin
+      # TODO: This line introduces a requirement that any class that mixes in this
+      # module must either be a subclass of `Puppet::Indirector::REST`, or
+      # implement its own compatible `#http_post` method, which, unfortunately,
+      # is not likely to have the same error handling functionality as the
+      # one in the REST class.  This was addressed in the following Puppet ticket:
+      #  http://projects.puppetlabs.com/issues/15975
+      #
+      # and has been fixed in Puppet 3.0, so we can clean this up as soon we no longer need to maintain
+      # backward-compatibity with older versions of Puppet.
+      response = http_post(request, CommandsUrl, "checksum=#{checksum}&payload=#{payload}", headers)
+
+      log_x_deprecation_header(response)
+
+      if response.is_a? Net::HTTPSuccess
+        result = PSON.parse(response.body)
+        Puppet.info "'#{command}' command#{for_whom} submitted to PuppetDB with UUID #{result['uuid']}"
+        result
+      else
+        # Newline characters cause an HTTP error, so strip them
+        raise "[#{response.code} #{response.message}] #{response.body.gsub(/[\r\n]/, '')}"
+      end
+    rescue => e
+      # TODO: Use new exception handling methods from Puppet 3.0 here as soon as
+      #  we are able to do so (can't call them yet w/o breaking backwards
+      #  compatibility.)  We should either be using a nested exception or calling
+      #  Puppet::Util::Logging#log_exception or #log_and_raise here; w/o them
+      #  we lose context as to where the original exception occurred.
+      raise Puppet::Error, "Failed to submit '#{command}' command#{for_whom} to PuppetDB at #{self.class.server}:#{self.class.port}: #{e}"
+    end
+  end
+
 
   def headers
     {
