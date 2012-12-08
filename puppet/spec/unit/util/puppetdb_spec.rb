@@ -160,50 +160,130 @@ CONF
   describe "spooling commands" do
 
     let(:command_dir)    { subject.send(:command_dir) }
-    let(:certname)       { 'foo.localdomain' }
-    let(:command_name)   { "OPEN SESAME" }
-    let(:payload)        { "{'resistance': 'futile', 'opinion': 'irrelevant'}" }
-    let(:checksum)       { Digest::SHA1.hexdigest(payload) }
-    let(:command)        { Command.new(command_name, certname, payload, checksum) }
+    let(:payload)        { {'resistance' =>  'futile', 'opinion' => 'irrelevant'} }
+    let(:good_command1)  { Command.new("OPEN SESAME", 'foo.localdomain',
+                                       payload.merge(:uniqueprop => "good_command1").to_pson) }
+    let(:good_command2)  { Command.new("OPEN SESAME", 'bar.localdomain',
+                                       payload.merge(:uniqueprop => "good_command2").to_pson) }
+    let(:bad_command)    { Command.new("BAD COMMAND", 'foo.localdomain',
+                                       payload.merge(:uniqueprop => "bad_command1").to_pson) }
+
+    def command_file_path(command)
+      command_file_name = subject.send(:command_file_name, command)
+      File.join(command_dir, command_file_name)
+    end
 
     describe "#enqueue_command" do
       it "should write the command to a file and log a message" do
-        subject.send(:enqueue_command, command_dir, command)
-        test_logs.find{|m| m =~ /Spooled PuppetDB command.*to file/}.should_not be_nil
-        command_file_name = subject.send(:command_file_name, command)
-        command_file_path = File.join(command_dir, command_file_name)
-        File.exist?(command_file_path).should == true
-        spooled_command = subject.send(:load_command, command_file_path)
-        spooled_command.should == command
+        subject.send(:enqueue_command, command_dir, good_command1)
+        test_logs.find_all {|m| m =~ /Spooled PuppetDB command.*to file/}.length.should == 1
+        path = command_file_path(good_command1)
+        File.exist?(path).should == true
+        spooled_command = subject.send(:load_command, path)
+        spooled_command.should == good_command1
       end
     end
 
     describe "#flush_commands" do
       context "when there are no files in the directory" do
-        it "should fail" do
-          fail
+        it "should do nothing, log nothing" do
+          subject.send(:flush_commands, command_dir)
+          subject.expects(:load_command).never
+          test_logs.length.should == 0
         end
       end
 
       context "when there are files in the directory" do
         context "when the commands can all be submitted successfully" do
-          it "should submit each command, log a message, and delete the files" do
-            fail
+          it "should submit each command and delete the files" do
+            subject.send(:enqueue_command, command_dir, good_command1)
+            subject.send(:enqueue_command, command_dir, good_command2)
+            subject.expects(:submit_single_command).times(2)
+            subject.send(:flush_commands, command_dir)
+            Dir.glob(File.join(command_dir, "*")).length.should == 0
           end
         end
 
         context "when some of the commands cannot be submitted successfully" do
-          it "should submit each command, log successes and failures, and delete only the successful files" do
-            fail
+          let(:subject) {
+            class TestClass
+              include Puppet::Util::Puppetdb
+
+              attr_reader :num_commands_submitted
+
+              # I wish this test wasn't so tightly coupled with the implementation
+              # details, but I need a way to make some commands "fail" and others
+              # succeed.
+              def submit_single_command(command)
+                @num_commands_submitted ||= 0
+                @num_commands_submitted += 1
+                if (command.command == "BAD COMMAND")
+                  raise Puppet::Error("Strange things are afoot")
+                end
+              end
+
+            end
+
+            TestClass.new
+          }
+
+          it "should submit each command, log failures, and delete only the successful files" do
+
+            subject.send(:enqueue_command, command_dir, good_command1)
+            subject.send(:enqueue_command, command_dir, good_command2)
+            subject.send(:enqueue_command, command_dir, bad_command)
+
+            # More coupling with implementation details, yuck.  However, it's
+            # important here that I know that the failed command will be processed
+            # before at least one 'good' command, to ensure that the bad
+            # command doesn't prevent us from continuing processing.
+            subject.stubs(:all_command_files).returns([
+                command_file_path(bad_command),
+                command_file_path(good_command1),
+                command_file_path(good_command2),
+            ])
+
+            subject.send(:flush_commands, command_dir)
+            subject.num_commands_submitted.should == 3
+            Dir.glob(File.join(command_dir, "*")).should == [command_file_path(bad_command)]
+
+            require 'pp'
+            pp test_logs
+
+            test_logs.find_all { |m| m =~ /Failed to submit command to PuppetDB/ }.length.should == 1
           end
         end
       end
     end
 
     describe "#submit_single_command" do
+      let(:subject) {
+        class TestClass
+          include Puppet::Util::Puppetdb
+      #
+      #    attr_reader :num_commands_submitted
+      #
+      #    # I wish this test wasn't so tightly coupled with the implementation
+      #    # details, but I need a way to make some commands "fail" and others
+      #    # succeed.
+      #    def http_post(command)
+      #      @num_commands_submitted ||= 0
+      #      @num_commands_submitted += 1
+      #      if (command.command == "BAD COMMAND")
+      #        raise Puppet::Error("Strange things are afoot")
+      #      end
+      #    end
+      #
+
+        end
+
+        TestClass.new
+      }
+
       context "when the submission succeeds" do
         it "should issue the HTTP POST and log success" do
-          fail
+          subject.expects(:http_post).returns("hi")
+          subject.send(:submit_single_command, good_command1)
         end
       end
 

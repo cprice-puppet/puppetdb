@@ -42,7 +42,26 @@ module Puppet::Util::Puppetdb
   # this hacky struct to comply with the existing "API".
   BunkRequest = Struct.new(:server, :port, :key)
 
-  Command = Struct.new(:command, :certname, :payload, :checksum)
+  Command = Struct.new(:command, :certname, :payload)
+  #  attr_reader :command, :certname, :payload, :checksum
+  #
+  #  def initialize(command, certname, payload, checksum = nil)
+  #    @command = command
+  #    @certname = certname
+  #    @payload = CGI.escape(payload)
+  #    @checksum =
+  #  end
+  #
+  #  def ==(other)
+  #    (@command == other.command) &&
+  #        (@certname == other.certname) &&
+  #        (@payload == other.payload)
+  #  end
+  #
+  #  def checksum
+  #    @checksum ||= Digest::SHA1.hexdigest(payload)
+  #  end
+  #end
 
   # Public class methods and magic voodoo
 
@@ -88,9 +107,8 @@ module Puppet::Util::Puppetdb
   # Public instance methods
 
   def submit_command(request, command_payload, command_name, version)
-    message = format_command(command_payload, command_name, version)
-    checksum = Digest::SHA1.hexdigest(message)
-    command = Command.new(command_name, request.key, message, checksum)
+    payload = format_command(command_payload, command_name, version)
+    command = Command.new(command_name, request.key, payload)
 
     spool = config.has_key?(command_name) ? config[command_name][:spool] : false
 
@@ -191,43 +209,65 @@ module Puppet::Util::Puppetdb
   end
 
   def command_file_name(command)
-    "#{command.certname}_#{command.checksum}.command"
+    # TODO: the logic for this method probably needs to be improved.  For the time
+    # being, we are giving the catalog/fact commands very specific filenames
+    # that are intended to prevent the existence of more than one catalog/fact
+    # command per node in the spool dir.  Otherwise we'd need to deal with
+    # ordering issues.
+    clean_command_name = command.command.gsub(/[^\w_]/, "_")
+    if ([CommandReplaceCatalog, CommandReplaceFacts].include?(command.command))
+      "#{command.certname}_#{clean_command_name}.command"
+    else
+      # otherwise we're using a sha1 of the payload to try to prevent filename collisions.
+      #millis = (Time.now.to_f * 1000.0).to_i
+      "#{command.certname}_#{clean_command_name}_#{Digest::SHA1.hexdigest(command.payload)}.command"
+    end
+  end
+
+  def all_command_files(dir)
+    # this method is mostly useful for testing purposes
+    Dir.glob(File.join(dir, "*.command"))
   end
 
   def load_command(command_file_path)
     rv = Command.new
+
     File.open(command_file_path, "r") do |f|
       rv.certname = f.readline.strip
       rv.command = f.readline.strip
-      rv.checksum = f.readline.strip
       rv.payload = f.read
     end
     rv
   end
 
-  def enqueue_command(command_dir, command)
-    file_path = File.join(command_dir, command_file_name(command))
+  def enqueue_command(dir, command)
+    file_path = File.join(dir, command_file_name(command))
 
     File.open(file_path, "w") do |f|
       f.puts(command.certname)
       f.puts(command.command)
-      f.puts(command.checksum)
       f.write(command.payload)
     end
     Puppet.notice("Spooled PuppetDB command for node '#{command.certname}' to file: '#{file_path}'")
   end
 
-  def flush_commands(command_dir)
-    Dir.glob(File.join(command_dir, "*.command")).each do |command_file_path|
+  def flush_commands(dir)
+
+    ######################################
+    # TODO: IMPLEMENT A MAX FAILURE COUNT
+    ######################################
+
+    all_command_files(dir).each do |path|
+      puts "CHECKING FILE #{path}"
       begin
-        command = load_command(command_file_path)
+        command = load_command(path)
 
         submit_single_command(command)
         # If we get here, the command was submitted successfully so we can
         # clean up the file from vardir.
-        File.delete(command_file_path)
+        File.delete(path)
       rescue => e
-        Puppet.err("Failed to submit command to PuppetDB; command saved to file '#{command_file_path}'.  Queued for retry.")
+        Puppet.err("Failed to submit command to PuppetDB; command saved to file '#{path}'.  Queued for retry.")
       end
     end
   end
@@ -248,7 +288,8 @@ module Puppet::Util::Puppetdb
       # and has been fixed in Puppet 3.0, so we can clean this up as soon we no longer need to maintain
       # backward-compatibity with older versions of Puppet.
       request = BunkRequest.new(config[:server], config[:port], command.certname)
-      response = http_post(request, CommandsUrl, "checksum=#{command.checksum}&payload=#{payload}", headers)
+      checksum = Digest::SHA1.hexdigest(payload)
+      response = http_post(request, CommandsUrl, "checksum=#{checksum}&payload=#{payload}", headers)
 
       log_x_deprecation_header(response)
 
