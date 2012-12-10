@@ -1,1 +1,3 @@
-<%= @plibdir -%>/puppet
+<%= @plibdir.gsub(/^\//, '') -%>/puppet
+<%= @terminus_lib_dir.gsub(/^\//, '') %>
+

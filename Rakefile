@@ -90,6 +90,7 @@ if @pe
     @initscriptname = "/etc/init.d/pe-puppetdb"
     @log_dir = "/var/log/pe-puppetdb"
     @lib_dir = "/opt/puppet/share/puppetdb"
+    @terminus_lib_dir = "/opt/puppet/share/puppetdb-terminus"
     @name ="pe-puppetdb"
     @sbin_dir = "/opt/puppet/sbin"
     @cows = 'lenny', 'lucid', 'squeeze', 'precise'
@@ -101,6 +102,7 @@ else
     @initscriptname = "/etc/init.d/puppetdb"
     @log_dir = "/var/log/puppetdb"
     @lib_dir = "/var/lib/puppetdb"
+    @terminus_lib_dir = "/var/lib/puppetdb-terminus"
     @link = "/usr/share/puppetdb"
     @name = "puppetdb"
     @sbin_dir = "/usr/sbin"
