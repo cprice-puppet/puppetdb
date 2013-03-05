@@ -1,6 +1,8 @@
 (ns com.puppetlabs.test.concurrent
   (:use [com.puppetlabs.concurrent]
-        [clojure.test])
+        [com.puppetlabs.testutils.logging]
+        [clojure.test]
+        [com.puppetlabs.utils :only [swap-and-return-old-val!]])
   (:require [clojure.tools.logging :as log])
   (:import [java.util.concurrent Semaphore]))
 

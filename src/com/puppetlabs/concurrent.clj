@@ -5,7 +5,10 @@
 ;; functions and/or structures from `java.util.concurrent`.
 
 (ns com.puppetlabs.concurrent
-  (:import  [java.util.concurrent Semaphore]))
+  (:import  [java.util.concurrent Semaphore LinkedBlockingQueue
+              ArrayBlockingQueue ExecutionException])
+  (:use     [com.puppetlabs.utils :only [iterator-fn->lazy-seq]])
+  (:require [clojure.tools.logging :as log]))
 
 (defn bound-via-semaphore
   "Given a semaphore `sem` function `f`, return a new function which simply
