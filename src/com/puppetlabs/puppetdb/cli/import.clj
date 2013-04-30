@@ -87,21 +87,35 @@
   (let [path    (.getName tar-entry)
         catalog-pattern (str "^" (.getPath (io/file export-root-dir "catalogs" ".*\\.json")) "$")
         report-pattern (str "^" (.getPath (io/file export-root-dir "reports" ".*\\.json")) "$")]
-    (when (re-find (re-pattern catalog-pattern) path)
-      (println (format "Importing catalog from archive entry '%s'" path))
-      ;; NOTE: these submissions are async and we have no guarantee that they
-      ;;   will succeed.  We might want to add something at the end of the import
-      ;;   that polls puppetdb until the command queue is empty, then does a
-      ;;   query to the /nodes endpoint and shows the set difference between
-      ;;   the list of nodes that we submitted and the output of that query
-      (submit-catalog host port
-        (get-in metadata [:command-versions :replace-catalog])
-        content))
-    (when (re-find (re-pattern report-pattern) path)
-      (println (format "Importing report from archive entry '%s'" path))
-      (submit-report host port
-        (get-in metadata [:command-versions :store-report])
-        content))))
+    (cond
+      (re-find (re-pattern catalog-pattern) path)
+      (do
+        (println (format "Importing catalog from archive entry '%s'" path))
+        ;; NOTE: these submissions are async and we have no guarantee that they
+        ;;   will succeed.  We might want to add something at the end of the import
+        ;;   that polls puppetdb until the command queue is empty, then does a
+        ;;   query to the /nodes endpoint and shows the set difference between
+        ;;   the list of nodes that we submitted and the output of that query
+        (submit-catalog host port
+          (get-in metadata [:command-versions :replace-catalog])
+          content)
+        {:type    :catalog
+         :message (format "Submitted catalog from archive entry '%s'" path)})
+
+      (re-find (re-pattern report-pattern) path)
+      (do
+        (println (format "Importing report from archive entry '%s'" path))
+        (submit-report host port
+          (get-in metadata [:command-versions :store-report])
+          content)
+        {:type    :catalog
+         :message (format "Submitted catalog from archive entry '%s'" path)})
+
+      :else
+      {:type    :unknown
+       :message "Unrecognized tar entry; skipping"})))
+
+
 
 (defn -main
   [& args]
