@@ -22,6 +22,7 @@
           :timestamp        "2011-01-01T12:00:01-03:00"
           :resource-type    "Notify"
           :resource-title   "notify, yo"
+          :resource-class   nil
           :property         "message"
           :new-value        "notify, yo"
           :old-value        ["what" "the" "woah"]
@@ -34,6 +35,7 @@
           :timestamp        "2011-01-01T12:00:03-03:00"
           :resource-type    "Notify"
           :resource-title   "notify, yar"
+          :resource-class   nil
           :property         "message"
           :new-value        {"absent" 5}
           :old-value        {"absent" true}
@@ -46,6 +48,7 @@
           :timestamp        "2011-01-01T12:00:02-03:00"
           :resource-type    "Notify"
           :resource-title   "hi"
+          :resource-class   nil
           :property         nil
           :new-value        nil
           :old-value        nil
