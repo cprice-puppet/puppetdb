@@ -27,7 +27,7 @@
     ["timestamp"]
     (if-let [timestamp (to-timestamp value)]
       {:where (format "resource_events.timestamp %s ?" op)
-       :params [(to-timestamp value)]}
+       :params [timestamp]}
       (throw (IllegalArgumentException. (format "'%s' is not a valid timestamp value" value))))
 
     :else (throw (IllegalArgumentException.
@@ -63,6 +63,13 @@
       [(field :when #{"old_value" "new_value"})]
       {:where (format "resource_events.%s = ? AND resource_events.%s IS NOT NULL" field field)
        :params [(db-serialize value)] }
+
+      ["timestamp"]
+      (if-let [timestamp (to-timestamp value)]
+        {:where "resource_events.timestamp = ?"
+         :params [timestamp]}
+        (throw (IllegalArgumentException. (format "'%s' is not a valid timestamp value" value))))
+
 
       :else (throw (IllegalArgumentException.
                      (str path " is not a queryable object for resource events"))))))
