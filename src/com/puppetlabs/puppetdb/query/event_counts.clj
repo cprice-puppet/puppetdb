@@ -5,13 +5,24 @@
   (:use [com.puppetlabs.jdbc :only [query-to-vec
                                     valid-jdbc-query?]]))
 
+(defn get-group-by
+  ;; TODO docs
+  [summarize-by]
+  (condp = summarize-by
+    "certname" "certname"
+    "resource-class" "resource_class"
+    "resource" "resource_type, resource_title"
+    (throw (IllegalArgumentException.
+             (format "Unsupported-value for 'summarize-by': '%s'" summarize-by)))))
+
 (defn query->sql
   ;; TODO docs
-  [query group-by]
+  [query summarize-by]
   {:pre  [(vector? query)]
    :post [(valid-jdbc-query? %)]}
-  ;; TODO sanitize / validate group-by, convert dashes to underscores, etc.
-  (let [[event-sql & event-params] (event/query->sql query)
+
+  (let [group-by (get-group-by summarize-by)
+        [event-sql & event-params] (event/query->sql query)
         sql (format
               (str "SELECT %s,
                       SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) AS failures,

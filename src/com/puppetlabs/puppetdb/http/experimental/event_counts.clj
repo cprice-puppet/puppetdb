@@ -29,11 +29,11 @@
   (app
     [""]
     {:get (fn [{:keys [params globals]}]
-            (produce-body (params "query") (params "group-by") (:scf-db globals)))}))
+            (produce-body (params "query") (params "summarize-by") (:scf-db globals)))}))
 
 (def event-counts-app
   "Ring app for querying for summary information about resource events."
   (-> routes
     verify-accepts-json
     (verify-param-exists "query")
-    (verify-param-exists "group-by")))
+    (verify-param-exists "summarize-by")))
