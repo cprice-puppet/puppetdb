@@ -54,7 +54,7 @@
       ;; these fields allow NULL, which causes a change in semantics when
       ;; wrapped in a NOT(...) clause, so we have to be very explicit
       ;; about the NULL case.
-      [(field :when #{"property" "message"})]
+      [(field :when #{"resource_class" "property" "message"})]
       {:where (format "resource_events.%s = ? AND resource_events.%s IS NOT NULL" field field)
        :params [value] }
 
@@ -124,6 +124,7 @@
                                   resource_events.timestamp,
                                   resource_events.resource_type,
                                   resource_events.resource_title,
+                                  resource_events.resource_class,
                                   resource_events.property,
                                   resource_events.new_value,
                                   resource_events.old_value,

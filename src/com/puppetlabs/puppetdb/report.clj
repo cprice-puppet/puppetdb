@@ -24,14 +24,16 @@
    :timestamp          :datetime
    :resource-type      :string
    :resource-title     :string
+   :resource-class     { :optional? true
+                         :type      :string }
    :property           { :optional? true
-                         :type      :string}
+                         :type      :string }
    :new-value          { :optional? true
                          :type      :jsonable }
    :old-value          { :optional? true
                          :type      :jsonable }
    :message            { :optional? true
-                         :type      :string}})
+                         :type      :string }})
 
 (defn validate!
   "Validate a report data structure.  Throws IllegalArgumentException if

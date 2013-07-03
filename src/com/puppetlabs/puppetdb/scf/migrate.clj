@@ -315,6 +315,15 @@
                (format "Unsupported database engine '%s'"
                  (sql-current-connection-database-name)))))))
 
+(defn add-event-resource-class
+  "Add a column and an index for the resource's containing class in the
+  resource_events table."
+  []
+  (sql/do-commands
+    "ALTER TABLE resource_events ADD resource_class TEXT")
+  (sql/do-commands
+    "CREATE INDEX idx_resource_events_resource_class ON resource_events(resource_class)"))
+
 ;; The available migrations, as a map from migration version to migration
 ;; function.
 (def migrations
@@ -328,7 +337,8 @@
    8 rename-fact-column
    9 add-reports-tables
    10 add-event-status-index
-   11 increase-puppet-version-field-length})
+   11 increase-puppet-version-field-length
+   12 add-event-resource-class })
 
 (def desired-schema-version (apply max (keys migrations)))
 
