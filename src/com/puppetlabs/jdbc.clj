@@ -79,6 +79,12 @@
     (format "select results.* from (%s) results LIMIT %s" query (inc limit))
     query))
 
+(defn add-order-by-clause
+  ;; TODO: docs / preconds
+  [query order-by]
+  ;; TODO: sanitize/validate order-by
+  (format "SELECT results.* FROM (%s) results ORDER BY %s" query order-by))
+
 (defn limited-query-to-vec
   "Take a limit and an SQL query (with optional parameters), and return the
   result of the query as a vector.  These results, unlike a normal query result,
@@ -122,6 +128,18 @@
   ([sql-query-and-params]
      {:pre [((some-fn string? vector?) sql-query-and-params)]}
      (limited-query-to-vec 0 sql-query-and-params)))
+
+(defn sorted-query-to-vec
+  ;; TODO docs
+  [query {order-by "order-by"}]
+    {:pre [((some-fn string? vector?) query)
+           ((some-fn string? nil?) order-by)]}
+  (let [sql-query-and-params (if (string? query) [query] query)
+        [sql & params] sql-query-and-params
+        ordered-query (if order-by
+                        (add-order-by-clause sql order-by)
+                        sql)]
+    (query-to-vec (apply vector ordered-query params))))
 
 (defn table-count
   "Returns the number of rows in the supplied table"

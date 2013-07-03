@@ -2,7 +2,7 @@
 
 (ns com.puppetlabs.puppetdb.query.event-counts
   (:require [com.puppetlabs.puppetdb.query.event :as event])
-  (:use [com.puppetlabs.jdbc :only [query-to-vec
+  (:use [com.puppetlabs.jdbc :only [sorted-query-to-vec
                                     valid-jdbc-query?]]))
 
 (defn get-group-by
@@ -67,6 +67,6 @@
 
 (defn query-resource-event-counts
   ;; TODO docs
-  [[sql & params]]
+  [[sql & params :as sql-and-params] query-params]
   {:pre [(string? sql)]}
-  (query-to-vec (apply vector sql params)))
+  (sorted-query-to-vec sql-and-params query-params))
