@@ -15,14 +15,10 @@
     (throw (IllegalArgumentException.
              (format "Unsupported-value for 'summarize-by': '%s'" summarize-by)))))
 
-(defn query->sql
-  ;; TODO docs
-  [query summarize-by]
-  {:pre  [(vector? query)]
-   :post [(valid-jdbc-query? %)]}
-
-  (let [group-by (get-group-by summarize-by)
-        [event-sql & event-params] (event/query->sql query)
+(defn- event-count-sql
+  ;; TODO docs / preconds
+  [query group-by]
+  (let [[event-sql & event-params] (event/query->sql query)
         sql (format
               (str "SELECT %s,
                       SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) AS failures,
@@ -32,14 +28,42 @@
 
                     FROM (%s) events
                     GROUP BY %s")
-                ;; TODO: support order by and limit (probably globally, not here)
-                ;   ORDER BY failures DESC
-                ;   LIMIT 10
-              group-by
-              event-sql
-              group-by)
-        result (apply vector sql event-params)]
-    result))
+          ;; TODO: support order by and limit (probably globally, not here)
+          ;   ORDER BY failures DESC
+          ;   LIMIT 10
+          group-by
+          event-sql
+          group-by)]
+    (apply vector sql event-params)))
+
+(defn- aggregate-sql
+  ;; TODO docs/preconds
+  [event-count-sql]
+  (let [[count-sql & params] event-count-sql
+        sql (format
+              (str "SELECT SUM(CASE WHEN successes > 0 THEN 1 ELSE 0 END) as successes,
+	                    SUM(CASE WHEN failures > 0 THEN 1 ELSE 0 END) as failures,
+	                    SUM(CASE WHEN noops > 0 THEN 1 ELSE 0 END) as noops,
+	                    SUM(CASE WHEN skips > 0 THEN 1 ELSE 0 END) as skips
+
+	                  FROM (%s) event_counts")
+              count-sql)]
+    (apply vector sql params)))
+
+(defn query->sql
+  ;; TODO docs
+  [query summarize-by aggregate]
+  {:pre  [(vector? query)
+          (string? summarize-by)
+          ((some-fn true? false?) aggregate)]
+   :post [(valid-jdbc-query? %)]}
+
+  (let [group-by (get-group-by summarize-by)
+        sql (event-count-sql query group-by)]
+    (if aggregate
+      (aggregate-sql sql)
+      sql)))
+
 
 (defn query-resource-event-counts
   ;; TODO docs

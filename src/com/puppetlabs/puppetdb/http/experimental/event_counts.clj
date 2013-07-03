@@ -10,14 +10,15 @@
 
 (defn produce-body
   ;; TODO docstring
-  [query group-by db]
+  [query group-by aggregate db]
   (try
-    (with-transacted-connection db
-      (-> query
-        (json/parse-string true)
-        (query/query->sql group-by)
-        (query/query-resource-event-counts)
-        (pl-http/json-response)))
+    (let [aggregate? (Boolean/valueOf aggregate)]
+      (with-transacted-connection db
+        (-> query
+          (json/parse-string true)
+          (query/query->sql group-by aggregate?)
+          (query/query-resource-event-counts)
+          (pl-http/json-response))))
     (catch com.fasterxml.jackson.core.JsonParseException e
       (pl-http/error-response e))
     (catch IllegalArgumentException e
@@ -29,7 +30,7 @@
   (app
     [""]
     {:get (fn [{:keys [params globals]}]
-            (produce-body (params "query") (params "summarize-by") (:scf-db globals)))}))
+            (produce-body (params "query") (params "summarize-by") (params "aggregate") (:scf-db globals)))}))
 
 (def event-counts-app
   "Ring app for querying for summary information about resource events."
