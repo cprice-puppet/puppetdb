@@ -25,6 +25,8 @@
    :timestamp          :datetime
    :resource-type      :string
    :resource-title     :string
+   :resource-class     { :optional? true
+                         :type      :string }
    :property           { :optional? true
                          :type      :string }
    :new-value          { :optional? true
