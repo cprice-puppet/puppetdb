@@ -4,6 +4,7 @@
         [com.puppetlabs.puppetdb.http.experimental.population :only (population-app)]
         [com.puppetlabs.puppetdb.http.experimental.event :only (events-app)]
         [com.puppetlabs.puppetdb.http.experimental.event-counts :only (event-counts-app)]
+        [com.puppetlabs.puppetdb.http.experimental.node-run-summary :only (node-run-summary-app)]
         [com.puppetlabs.puppetdb.http.experimental.report :only (reports-app)]
         [net.cgrand.moustache :only (app)]))
 
@@ -23,6 +24,9 @@
 
    ["event-counts" &]
    {:any event-counts-app}
+
+   ["node-run-summary" &]
+   {:any node-run-summary-app}
 
    ["reports" &]
    {:any reports-app}))
