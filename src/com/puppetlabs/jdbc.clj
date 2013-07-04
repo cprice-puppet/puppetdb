@@ -76,8 +76,19 @@
   {:pre [(and (integer? limit) (>= limit 0))
          (string? query)]}
   (if (pos? limit)
-    (format "select results.* from (%s) results LIMIT %s" query (inc limit))
+    (format "SELECT results.* FROM (%s) results LIMIT %s" query (inc limit))
     query))
+
+(defn add-paging-clause
+  ;; TODO: docs / preconds
+  [query start-offset page-size]
+  {:pre [((some-fn nil? integer?) start-offset)
+         ((some-fn nil? pos?) page-size)]}
+  (if (some nil? [start-offset page-size])
+    (throw
+      (IllegalArgumentException.
+        "You must pass both of 'start-offset' and 'page-size', or neither.")))
+  (format "SELECT results.* FROM (%s) results OFFSET %s LIMIT %s" query start-offset page-size))
 
 (defn add-order-by-clause
   ;; TODO: docs / preconds
@@ -129,17 +140,24 @@
      {:pre [((some-fn string? vector?) sql-query-and-params)]}
      (limited-query-to-vec 0 sql-query-and-params)))
 
-(defn sorted-query-to-vec
+(defn paged-sorted-query-to-vec
   ;; TODO docs
-  [query {order-by "order-by"}]
+  [query {order-by "order-by"
+          start-offset "start-offset"
+          page-size "page-size"}]
     {:pre [((some-fn string? vector?) query)
            ((some-fn string? nil?) order-by)]}
-  (let [sql-query-and-params (if (string? query) [query] query)
-        [sql & params] sql-query-and-params
-        ordered-query (if order-by
-                        (add-order-by-clause sql order-by)
-                        sql)]
-    (query-to-vec (apply vector ordered-query params))))
+  (let [sql-query-and-params  (if (string? query) [query] query)
+        [sql & params]        sql-query-and-params
+        ordered-query         (if order-by
+                                (add-order-by-clause sql order-by)
+                                sql)
+        start-offset          (if start-offset (Integer/parseInt start-offset))
+        page-size             (if page-size (Integer/parseInt page-size))
+        paged-query           (if (or start-offset page-size)
+                                (add-paging-clause ordered-query start-offset page-size)
+                                ordered-query)]
+    (query-to-vec (apply vector paged-query params))))
 
 (defn table-count
   "Returns the number of rows in the supplied table"
