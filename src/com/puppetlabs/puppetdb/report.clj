@@ -25,8 +25,8 @@
    :timestamp          :datetime
    :resource-type      :string
    :resource-title     :string
-   :resource-class     { :optional? true
-                         :type      :string }
+   :containment-path   { :optional? true
+                         :type      :coll}
    :property           { :optional? true
                          :type      :string }
    :new-value          { :optional? true
@@ -80,5 +80,9 @@
   [_ report]
   (validate-against-model! Report report)
   (doseq [resource-event (:resource-events report)]
-    (validate-against-model! ResourceEvent resource-event))
+    (validate-against-model! ResourceEvent resource-event)
+    (if (not-every? string? (resource-event :containment-path))
+      (throw (IllegalArgumentException.
+               (format "Containment path should only contain strings: '%s'"
+                 (resource-event :containment-path))))))
   report)

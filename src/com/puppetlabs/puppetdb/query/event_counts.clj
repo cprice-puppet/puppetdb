@@ -10,7 +10,7 @@
   [summarize-by]
   (condp = summarize-by
     "certname" "certname"
-    "resource-class" "resource_class"
+    "containing-class" "containing_class"
     "resource" "resource_type, resource_title"
     (throw (IllegalArgumentException.
              (format "Unsupported-value for 'summarize-by': '%s'" summarize-by)))))

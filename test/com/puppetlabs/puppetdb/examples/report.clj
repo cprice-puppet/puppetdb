@@ -11,10 +11,10 @@
     :end-time               "2011-01-01T12:10:00-03:00"
     :resource-events
     ;; NOTE: this is a bit wonky because resource events should *not* contain
-    ;;  a certname on input, but they will have one on output.  To make it
-    ;;  easier to test output, we're included them here.  We also include a
+    ;;  a certname or containment-class on input, but they will have one on output.
+    ;;  To make it easier to test output, we've included them here.  We also include a
     ;;  `:test-id` field to make it easier to reference individual events during
-    ;;  testing.  Both of this are munged out by the testutils `store-example-report!`
+    ;;  testing.  All of these are munged out by the testutils `store-example-report!`
     ;;  function before the report is submitted to the test database.
         [{:test-id          1
           :certname         "foo.local"
@@ -22,7 +22,8 @@
           :timestamp        "2011-01-01T12:00:01-03:00"
           :resource-type    "Notify"
           :resource-title   "notify, yo"
-          :resource-class   nil
+          :containment-path nil
+          :containing-class nil
           :property         "message"
           :new-value        "notify, yo"
           :old-value        ["what" "the" "woah"]
@@ -35,7 +36,8 @@
           :timestamp        "2011-01-01T12:00:03-03:00"
           :resource-type    "Notify"
           :resource-title   "notify, yar"
-          :resource-class   nil
+          :containment-path []
+          :containing-class nil
           :property         "message"
           :new-value        {"absent" 5}
           :old-value        {"absent" true}
@@ -48,7 +50,8 @@
           :timestamp        "2011-01-01T12:00:02-03:00"
           :resource-type    "Notify"
           :resource-title   "hi"
-          :resource-class   nil
+          :containment-path ["Foo" "" "Bar[Baz]"]
+          :containing-class "Foo"
           :property         nil
           :new-value        nil
           :old-value        nil

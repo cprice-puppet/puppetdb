@@ -315,23 +315,19 @@
                (format "Unsupported database engine '%s'"
                  (sql-current-connection-database-name)))))))
 
+(defn initial-burgundy-schema-changes
+  "Schema changes for initial release of Burgundy.  These include:
 
-(defn add-file-line-columns-to-events-table
-  "Add 'file' and 'line' columns to the event table."
+  - Add 'file' and 'line' columns to the event table. 
+  - a column for the resource's containment path in the  resource_events table."
   []
   (sql/do-commands
     "ALTER TABLE resource_events ADD COLUMN file VARCHAR(1024) DEFAULT NULL"
-    "ALTER TABLE resource_events ADD COLUMN line INTEGER DEFAULT NULL"))
-
-
-(defn add-event-resource-class
-  "Add a column and an index for the resource's containing class in the
-  resource_events table."
-  []
-  (sql/do-commands
-    "ALTER TABLE resource_events ADD resource_class TEXT")
-  (sql/do-commands
-    "CREATE INDEX idx_resource_events_resource_class ON resource_events(resource_class)"))
+    "ALTER TABLE resource_events ADD COLUMN line INTEGER DEFAULT NULL"
+    (format "ALTER TABLE resource_events ADD containment_path %s"
+      (sql-array-type-string "TEXT"))
+    "ALTER TABLE resource_events ADD containing_class VARCHAR(255)"
+    "CREATE INDEX idx_resource_events_containing_class ON resource_events(containing_class)"))
 
 ;; The available migrations, as a map from migration version to migration
 ;; function.
@@ -347,8 +343,7 @@
    9 add-reports-tables
    10 add-event-status-index
    11 increase-puppet-version-field-length
-   12 add-file-line-columns-to-events-table
-   13 add-event-resource-class})
+   12 initial-burgundy-schema-changes })
 
 (def desired-schema-version (apply max (keys migrations)))
 

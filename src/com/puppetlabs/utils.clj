@@ -45,6 +45,14 @@
     (satisfies? ICoerce x)
     (to-date-time x)))
 
+;; ## String utilities
+
+(defn string-contains?
+  ;; TODO: docs
+  [substring s]
+  (>= (.indexOf s substring) 0))
+
+
 ;; ## I/O
 
 (defn lines
