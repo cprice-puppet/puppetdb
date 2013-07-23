@@ -83,7 +83,6 @@ Puppet::Reports.register_report(:puppetdb) do
         "timestamp"         => Puppet::Util::Puppetdb.to_wire_time(event.time),
         "resource-type"     => status.resource_type,
         "resource-title"    => status.title,
-        "resource-class"    => status.containing_class,
         "property"          => event.property,
         "new-value"         => event.desired_value,
         "old-value"         => event.previous_value,
