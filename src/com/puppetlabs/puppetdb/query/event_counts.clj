@@ -15,11 +15,22 @@
     (throw (IllegalArgumentException.
              (format "Unsupported-value for 'summarize-by': '%s'" summarize-by)))))
 
-(defn- event-count-sql
+
+(defn- get-count-by-sql
   ;; TODO docs / preconds
-  [query group-by]
-  (let [[event-sql & event-params] (event/query->sql query)
-        sql (format
+  [sql count-by group-by]
+  (condp = count-by
+    "resource"  sql
+    "node"      (format "SELECT DISTINCT certname, status, %s FROM (%s) distinct_events"
+                  group-by sql)
+    (throw (IllegalArgumentException.
+             (format "Unsupported value for 'count-by': '%s'" count-by)))))
+
+
+(defn- get-event-count-sql
+  ;; TODO docs / preconds
+  [event-sql group-by]
+  (let [sql (format
               (str "SELECT %s,
                       SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) AS failures,
                       SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,
@@ -34,36 +45,39 @@
           group-by
           event-sql
           group-by)]
-    (apply vector sql event-params)))
+;    (println "SQL:" sql)
+;    (println "PARAMS:" event-params)
+;    (apply vector sql event-params)))
+    sql))
 
-(defn- aggregate-sql
+(defn- get-aggregate-sql
   ;; TODO docs/preconds
-  [event-count-sql]
-  (let [[count-sql & params] event-count-sql
-        sql (format
+  [count-sql aggregate]
+  (if aggregate
+    (format
               (str "SELECT SUM(CASE WHEN successes > 0 THEN 1 ELSE 0 END) as successes,
 	                    SUM(CASE WHEN failures > 0 THEN 1 ELSE 0 END) as failures,
 	                    SUM(CASE WHEN noops > 0 THEN 1 ELSE 0 END) as noops,
 	                    SUM(CASE WHEN skips > 0 THEN 1 ELSE 0 END) as skips
-
 	                  FROM (%s) event_counts")
-              count-sql)]
-    (apply vector sql params)))
+              count-sql)
+    count-sql))
 
 (defn query->sql
   ;; TODO docs
-  [query summarize-by aggregate]
+  [query summarize-by count-by aggregate]
   {:pre  [(vector? query)
           (string? summarize-by)
+          (string? count-by)
           ((some-fn true? false?) aggregate)]
    :post [(valid-jdbc-query? %)]}
 
-  (let [group-by (get-group-by summarize-by)
-        sql (event-count-sql query group-by)]
-    (if aggregate
-      (aggregate-sql sql)
-      sql)))
-
+  (let [group-by                    (get-group-by summarize-by)
+        [event-sql & event-params]  (event/query->sql query)
+        count-by-sql                (get-count-by-sql event-sql count-by group-by)
+        event-count-sql             (get-event-count-sql count-by-sql group-by)
+        aggregate-sql               (get-aggregate-sql event-count-sql aggregate)]
+    (apply vector aggregate-sql event-params)))
 
 (defn query-resource-event-counts
   ;; TODO docs

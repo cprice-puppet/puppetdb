@@ -10,17 +10,19 @@
 
 (defn produce-body
   ;; TODO docstring
-  [{query "query"
-    summarize-by "summarize-by"
-    aggregate "aggregate"
+  [{query         "query"
+    summarize-by  "summarize-by"
+    count-by      "count-by"
+    aggregate     "aggregate"
     :as query-params}
    db]
   (try
-    (let [aggregate? (Boolean/valueOf aggregate)]
+    (let [aggregate? (Boolean/valueOf aggregate)
+          count-by   (or count-by "resource")]
       (with-transacted-connection db
         (-> query
           (json/parse-string true)
-          (query/query->sql summarize-by aggregate?)
+          (query/query->sql summarize-by count-by aggregate?)
           (query/query-resource-event-counts query-params)
           (pl-http/json-response))))
     (catch com.fasterxml.jackson.core.JsonParseException e
