@@ -57,8 +57,10 @@
       (throw (IllegalArgumentException.
                (format "%s requires exactly two arguments, but we found %d" op (dec count))))))
   (case path
-    "certname" {:where "reports.certname = ?"
-                :params [value] }
+    "certname"  {:where "reports.certname = ?"
+                 :params [value] }
+    "hash"      {:where "reports.hash = ?"
+                 :params [value] }
     (throw (IllegalArgumentException.
                  (str term " is not a valid query term")))))
 
