@@ -45,6 +45,11 @@
     (satisfies? ICoerce x)
     (to-date-time x)))
 
+(defn boolean?
+  "Returns true if the value is a boolean"
+  [value]
+  (instance? Boolean value))
+
 ;; ## String utilities
 
 (defn string-contains?
