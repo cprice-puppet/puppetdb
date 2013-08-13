@@ -65,18 +65,19 @@
 
 (defn query->sql
   ;; TODO docs
-  [query summarize-by count-by aggregate]
+  [query last-run-only? summarize-by count-by aggregate?]
   {:pre  [(vector? query)
+          ((some-fn true? false?) last-run-only?)
           (string? summarize-by)
           (string? count-by)
-          ((some-fn true? false?) aggregate)]
+          ((some-fn true? false?) aggregate?)]
    :post [(valid-jdbc-query? %)]}
 
   (let [group-by                    (get-group-by summarize-by)
-        [event-sql & event-params]  (event/query->sql query)
+        [event-sql & event-params]  (event/query->sql query last-run-only?)
         count-by-sql                (get-count-by-sql event-sql count-by group-by)
         event-count-sql             (get-event-count-sql count-by-sql group-by)
-        aggregate-sql               (get-aggregate-sql event-count-sql aggregate)]
+        aggregate-sql               (get-aggregate-sql event-count-sql aggregate?)]
     (apply vector aggregate-sql event-params)))
 
 (defn query-resource-event-counts

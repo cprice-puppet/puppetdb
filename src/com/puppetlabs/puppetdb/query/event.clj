@@ -121,29 +121,38 @@
 
 (defn query->sql
   "Compile a resource event `query` into an SQL expression."
-  [query]
-  {:pre  [(vector? query)]
-   :post [(valid-jdbc-query? %)]}
-  (let [{:keys [where params]} (compile-term resource-event-ops query)
-        sql (format (str "SELECT reports.certname,
-                                  resource_events.report,
-                                  resource_events.status,
-                                  resource_events.timestamp,
-                                  resource_events.resource_type,
-                                  resource_events.resource_title,
-                                  resource_events.containment_path,
-                                  resource_events.containing_class,
-                                  resource_events.property,
-                                  resource_events.new_value,
-                                  resource_events.old_value,
-                                  resource_events.message,
-                                  resource_events.file,
-                                  resource_events.line
-                                  FROM resource_events
-                                  JOIN reports ON resource_events.report = reports.hash
-                                  WHERE %s")
-              where)]
-    (apply vector sql params)))
+  ([query]
+    (query->sql query false))
+  ([query last-run-only?]
+    {:pre  [(vector? query)]
+     :post [(valid-jdbc-query? %)]}
+    (let [{:keys [where params]}  (compile-term resource-event-ops query)
+          last-run-only-join      (if last-run-only?
+                                    "INNER JOIN latest_reports
+                                        ON reports.certname = latest_reports.node
+                                        AND reports.hash = latest_reports.report"
+                                    "")
+          sql (format (str "SELECT reports.certname,
+                                    resource_events.report,
+                                    resource_events.status,
+                                    resource_events.timestamp,
+                                    resource_events.resource_type,
+                                    resource_events.resource_title,
+                                    resource_events.containment_path,
+                                    resource_events.containing_class,
+                                    resource_events.property,
+                                    resource_events.new_value,
+                                    resource_events.old_value,
+                                    resource_events.message,
+                                    resource_events.file,
+                                    resource_events.line
+                                    FROM resource_events
+                                    JOIN reports ON resource_events.report = reports.hash
+                                    %s
+                                    WHERE %s")
+                last-run-only-join
+                where)]
+      (apply vector sql params))))
 
 (defn limited-query-resource-events
   "Take a limit, a query, and its parameters, and return a vector of resource
