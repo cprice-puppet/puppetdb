@@ -76,7 +76,7 @@
   (testing "burgundy migration should populate the new `latest_reports` table correctly"
     (sql/with-connection db
       (clear-db-for-testing!)
-      (let [burgundy-migration-index  12
+      (let [burgundy-migration-index  13
             applied                   (range 1 burgundy-migration-index)
             basic                     (:basic reports)
             old-timestamp             (ago (days 1))
