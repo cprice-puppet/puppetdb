@@ -63,15 +63,16 @@
 
   If the query would return more than `limit` results, `status-internal-error`
   is returned."
-  [limit query last-run-only db]
+  [limit query-params db]
   {:pre [(and (integer? limit) (>= limit 0))]}
-  (let [last-run-only? (Boolean/valueOf last-run-only)]
+  (let [query           (query-params "query")
+        last-run-only?  (Boolean/valueOf (query-params "last-run-only"))]
     (try
       (with-transacted-connection db
         (-> query
             (json/parse-string true)
             (query/query->sql last-run-only?)
-            ((partial query/limited-query-resource-events limit))
+            ((partial query/limited-query-resource-events limit query-params))
             (pl-http/json-response)))
       (catch com.fasterxml.jackson.core.JsonParseException e
         (pl-http/error-response e))
@@ -91,7 +92,7 @@
     {:get (fn [{:keys [params globals]}]
             (let [limit (or (get-limit-from-params params)
                             (:event-query-limit globals))]
-              (produce-body limit (params "query") (params "last-run-only") (:scf-db globals))))}))
+              (produce-body limit params (:scf-db globals))))}))
 
 (def events-app
   "Ring app for querying events"

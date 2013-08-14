@@ -4,11 +4,12 @@
   (:require [com.puppetlabs.utils :as utils]
             [clojure.string :as string]
             [cheshire.core :as json])
-  (:use [com.puppetlabs.jdbc :only [limited-query-to-vec
+  (:use [com.puppetlabs.jdbc :only [paged-sorted-query-to-vec
                                     underscores->dashes
                                     dashes->underscores
                                     valid-jdbc-query?
                                     add-limit-clause]]
+        [com.puppetlabs.jdbc.internal :only [limit-result-set!]]
         [com.puppetlabs.puppetdb.scf.storage :only [db-serialize sql-regexp-match]]
         [com.puppetlabs.puppetdb.query :only [compile-term compile-and compile-or compile-not-v2]]
         [clojure.core.match :only [match]]
@@ -159,23 +160,35 @@
    events which match.  Throws an exception if the query would
    return more than `limit` results.  (A value of `0` for `limit` means
    that the query should not be limited.)"
-  [limit [query & params]]
-  {:pre  [(and (integer? limit) (>= limit 0))]
-   :post [(or (zero? limit) (<= (count %) limit))]}
-  (let [limited-query (add-limit-clause limit query)
-        results       (limited-query-to-vec limit (apply vector limited-query params))]
-    (map
-      #(-> (utils/mapkeys underscores->dashes %)
-         (update-in [:old-value] json/parse-string)
-         (update-in [:new-value] json/parse-string))
-      results)))
+  ([limit sql-and-params]
+    (limited-query-resource-events limit {} sql-and-params))
+  ([limit query-params [sql & sql-params]]
+    {:pre  [(and (integer? limit) (>= limit 0))]
+     :post [(or (zero? limit) (<= (count %) limit))]}
+    (let [limited-sql (add-limit-clause limit sql)
+  ;        results       (limited-query-to-vec limit (apply vector limited-query
+  ; params))]
+         ;; TODO: it probably doesn't make sense to be doing both `add-limit-clause`
+         ;;  *and* `paged-sorted-query`; should reconcile, but just doing this in
+         ;;  the interest of time for the prototype.
+          results         (paged-sorted-query-to-vec (apply vector limited-sql sql-params) query-params)
+          ;; TODO: this clause lives in `limited-query-to-vec`; adding it here
+          ;;  for now to get tests passing.
+          limited-results (limit-result-set! limit results)]
+      (map
+        #(-> (utils/mapkeys underscores->dashes %)
+           (update-in [:old-value] json/parse-string)
+           (update-in [:new-value] json/parse-string))
+        results))))
 
 (defn query-resource-events
   "Take a query and its parameters, and return a vector of matching resource
   events."
-  [[sql & params]]
-  {:pre [(string? sql)]}
-  (limited-query-resource-events 0 (apply vector sql params)))
+  ([sql-and-params]
+    (query-resource-events {} sql-and-params))
+  ([query-params [sql & params]]
+    {:pre [(string? sql)]}
+    (limited-query-resource-events 0 query-params (apply vector sql params))))
 
 (defn events-for-report-hash
   "Given a particular report hash, this function returns all events for that
