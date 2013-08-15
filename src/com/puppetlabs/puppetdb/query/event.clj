@@ -107,7 +107,7 @@
 
 
 
-  (defn resource-event-ops
+(defn resource-event-ops
   "Maps resource event query operators to the functions implementing them. Returns nil
   if the operator isn't known."
   [op]
