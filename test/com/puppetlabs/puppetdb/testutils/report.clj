@@ -31,6 +31,7 @@
   [events]
   {:pre  [(vector? events)]
    :post [(set? %)]}
+  ;(println "EVENTS:" events)
   (set (map
       #(-> %
         (update-in ["timestamp"] time-coerce/to-string)
@@ -49,6 +50,7 @@
   {:pre  [(map? report)]
    :post [(map? %)
           (set? (% "resource-events"))]}
+  ;(println "MUNGING REPORT:" report)
   (-> report
     (clojure.walk/stringify-keys)
     (update-in ["start-time"] time-coerce/to-string)

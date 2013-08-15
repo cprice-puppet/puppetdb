@@ -88,7 +88,7 @@
     (throw
       (IllegalArgumentException.
         "You must pass both of 'start-offset' and 'page-size', or neither.")))
-  (format "SELECT results.* FROM (%s) results OFFSET %s LIMIT %s" query start-offset page-size))
+  (format "SELECT COUNT(*) OVER() as total_count, results.* FROM (%s) results OFFSET %s LIMIT %s" query start-offset page-size))
 
 (defn add-order-by-clause
   ;; TODO: docs / preconds
@@ -146,7 +146,12 @@
           start-offset "start-offset"
           page-size "page-size"}]
     {:pre [((some-fn string? vector?) query)
-           ((some-fn string? nil?) order-by)]}
+           ((some-fn string? nil?) order-by)]
+     :post [(map? %)
+;            (do (println "total count:" (:total-count %)) true)
+            (and (integer? (:total-count %))
+                 (>= (:total-count %) 0))
+            (coll? (:results %))] }
   (let [sql-query-and-params  (if (string? query) [query] query)
         [sql & params]        sql-query-and-params
         ordered-query         (if order-by
@@ -156,8 +161,28 @@
         page-size             (if page-size (Integer/parseInt page-size))
         paged-query           (if (or start-offset page-size)
                                 (add-paging-clause ordered-query start-offset page-size)
-                                ordered-query)]
-    (query-to-vec (apply vector paged-query params))))
+                                ordered-query)
+        results               (query-to-vec (apply vector paged-query params))]
+    ;; TODO: gross. Refactor this whole block
+    (cond
+      (not (or start-offset page-size))
+      (do
+;        (println "no paging params")
+        { :total-count  0
+          :results      results })
+
+      (= (count results) 0)
+      (do
+;        (println "zero results!")
+        { :total-count  0
+          :results      results })
+
+      :else
+      (let [first-result  (first results)
+;            _             (println "FIRST RESULT:" first-result)
+            total-count   (first-result :total_count)]
+        {:total-count total-count
+         :results     (map #(dissoc % :total_count) results) }))))
 
 (defn table-count
   "Returns the number of rows in the supplied table"

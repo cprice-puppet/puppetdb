@@ -8,7 +8,8 @@
   (:require [ring.util.response :as rr]
             [cheshire.core :as json]
             [clojure.reflect :as r]
-            [clojure.string :as s]))
+            [clojure.string :as s]
+            [clojure.tools.logging :as log]))
 
 
 ;; ## HTTP Status codes
@@ -96,16 +97,27 @@
           (rr/response)
           (rr/status status-not-acceptable)))))
 
+(defn add-extra-header
+  [resp [key val]]
+  (rr/header resp key val))
+
+(defn add-extra-headers
+  [resp extra-headers]
+  (reduce add-extra-header resp extra-headers))
+
 (defn json-response
   "Returns a Ring response object with the supplied `body` and response `code`,
   and a JSON content type. If unspecified, `code` will default to 200."
   ([body]
      (json-response body status-ok))
   ([body code]
+     (json-response body code {}))
+  ([body code extra-headers]
      (-> body
          (json/generate-string {:date-format "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" :pretty true})
          (rr/response)
          (rr/header "Content-Type" "application/json")
+         (add-extra-headers extra-headers)
          (rr/charset "utf-8")
          (rr/status code))))
 
@@ -119,6 +131,11 @@
   ([error]
      (error-response error status-bad-request))
   ([error code]
+     (log/info "Returning HTTP error response due to error:"
+       (if (instance? Throwable error)
+         (str (.getMessage error) "\n"
+          (s/join "\n" (map str (.getStackTrace error))))
+         (str error)))
      (let [msg (if (instance? Throwable error)
                  (.getMessage error)
                  (str error))]

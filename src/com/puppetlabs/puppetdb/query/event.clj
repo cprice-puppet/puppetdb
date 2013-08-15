@@ -171,15 +171,19 @@
          ;; TODO: it probably doesn't make sense to be doing both `add-limit-clause`
          ;;  *and* `paged-sorted-query`; should reconcile, but just doing this in
          ;;  the interest of time for the prototype.
-          results         (paged-sorted-query-to-vec (apply vector limited-sql sql-params) query-params)
+         { total-count  :total-count
+           results      :results } (paged-sorted-query-to-vec (apply vector limited-sql sql-params) query-params)
           ;; TODO: this clause lives in `limited-query-to-vec`; adding it here
           ;;  for now to get tests passing.
           limited-results (limit-result-set! limit results)]
-      (map
-        #(-> (utils/mapkeys underscores->dashes %)
-           (update-in [:old-value] json/parse-string)
-           (update-in [:new-value] json/parse-string))
-        results))))
+;      (println "IN LQRE, total count:" total-count)
+      {:total-count total-count
+       :results 
+         (map
+           #(-> (utils/mapkeys underscores->dashes %)
+              (update-in [:old-value] json/parse-string)
+              (update-in [:new-value] json/parse-string))
+           results)})))
 
 (defn query-resource-events
   "Take a query and its parameters, and return a vector of matching resource
@@ -200,4 +204,5 @@
     (vec
       (-> query
         (query->sql)
-        (query-resource-events)))))
+        (query-resource-events)
+        (:results)))))

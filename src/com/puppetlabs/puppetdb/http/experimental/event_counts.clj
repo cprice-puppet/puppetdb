@@ -6,7 +6,8 @@
   (:use     [net.cgrand.moustache :only [app]]
             [com.puppetlabs.middleware :only [verify-param-exists
                                               verify-accepts-json]]
-            [com.puppetlabs.jdbc :only (with-transacted-connection)]))
+            [com.puppetlabs.jdbc :only (with-transacted-connection)]
+            [com.puppetlabs.http :only (status-ok)]))
 
 (defn produce-body
   ;; TODO docstring
@@ -25,10 +26,13 @@
           count-by          (or count-by "resource")
           last-run-only?    (Boolean/valueOf last-run-only)]
       (with-transacted-connection db
-        (-> query
-          (query/query->sql event-count-query last-run-only? summarize-by count-by aggregate?)
-          (query/query-resource-event-counts query-params)
-          (pl-http/json-response))))
+        (let [query-results
+                (-> query
+                  (query/query->sql event-count-query last-run-only? summarize-by count-by aggregate?)
+                  (query/query-resource-event-counts query-params))]
+;          (println "QUERY RESULTS:" query-results)
+          (pl-http/json-response (query-results :results)
+            status-ok { "X-Records" (query-results :total-count) }))))
     (catch com.fasterxml.jackson.core.JsonParseException e
       (pl-http/error-response e))
     (catch IllegalArgumentException e

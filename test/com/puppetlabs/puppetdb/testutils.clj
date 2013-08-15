@@ -181,6 +181,7 @@ to the result of the form supplied to this method."
   ([response expected]
     (response-equal? response expected identity))
   ([response expected body-munge-fn]
+    ;(println "RESPONSE:" response)
     (is (= pl-http/status-ok   (:status response)))
     (is (= pl-http/json-response-content-type (get-in response [:headers "Content-Type"])))
     (let [actual  (if (:body response)

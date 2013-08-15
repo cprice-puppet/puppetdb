@@ -53,7 +53,8 @@
             [ring.util.response :as rr])
   (:use [net.cgrand.moustache :only [app]]
         com.puppetlabs.middleware
-        [com.puppetlabs.jdbc :only (with-transacted-connection)]))
+        [com.puppetlabs.jdbc :only (with-transacted-connection)]
+        [com.puppetlabs.http :only (status-ok)]))
 
 (defn produce-body
   "Given a `limit`, a query and a database connection, return a Ring response
@@ -69,11 +70,14 @@
         last-run-only?  (Boolean/valueOf (query-params "last-run-only"))]
     (try
       (with-transacted-connection db
-        (-> query
-            (json/parse-string true)
-            (query/query->sql last-run-only?)
-            ((partial query/limited-query-resource-events limit query-params))
-            (pl-http/json-response)))
+        (let [query-results
+                (-> query
+                  (json/parse-string true)
+                  (query/query->sql last-run-only?)
+                  ((partial query/limited-query-resource-events limit query-params)))]
+;          (println "QUERY RESULTS:" query-results)
+          (pl-http/json-response (query-results :results)
+            status-ok { "X-Records" (query-results :total-count) })))
       (catch com.fasterxml.jackson.core.JsonParseException e
         (pl-http/error-response e))
       (catch IllegalArgumentException e

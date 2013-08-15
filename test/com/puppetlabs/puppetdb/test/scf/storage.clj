@@ -551,6 +551,7 @@
             certname      (:certname report1)
             _             (delete-reports-older-than! (ago (days 3)))
             expected      #{}
+            ;_             (println "ABOUT TO RUN QUERY")
             actual        (resource-events-query-result ["=" "report" report1-hash])]
         (is (= expected actual))))))
 

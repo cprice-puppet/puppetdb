@@ -76,6 +76,7 @@
             expected (expected-resource-events-response
                         (:resource-events basic)
                         report-hash)]
+        ;(println "RESPONSE:" response)
         (response-equal? response expected munge-event-values)))
 
 

@@ -59,9 +59,13 @@
   "Utility function that executes a resource events query and returns a set of
   results for use in test comparisons."
   [query]
+  ;(println "QUERY:" query)
   (->> (query/query->sql query)
        (query/query-resource-events)
+       (:results)
        (set)))
+;       (#(do (println "RESULT:" %) %))
+;       (:results)))
 
 
 (defn resource-events-limited-query-result
@@ -70,4 +74,5 @@
   [limit query]
   (->> (query/query->sql query)
        (query/limited-query-resource-events limit)
+       (:results)
        (set)))
