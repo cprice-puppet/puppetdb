@@ -111,7 +111,9 @@
               (str "SELECT SUM(CASE WHEN successes > 0 THEN 1 ELSE 0 END) as successes,
 	                    SUM(CASE WHEN failures > 0 THEN 1 ELSE 0 END) as failures,
 	                    SUM(CASE WHEN noops > 0 THEN 1 ELSE 0 END) as noops,
-	                    SUM(CASE WHEN skips > 0 THEN 1 ELSE 0 END) as skips
+	                    SUM(CASE WHEN skips > 0 THEN 1 ELSE 0 END) as skips,
+                            COUNT(*) as total
+
 	                  FROM (%s) event_counts")
               count-sql)
     count-sql))
