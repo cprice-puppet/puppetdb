@@ -55,10 +55,10 @@ Puppet::Reports.register_report(:puppetdb) do
                   status.events.map do |event|
                     event_to_hash(status, event)
                   end)
-            elsif status.skipped == true
-              events.concat([resource_status_to_skipped_event_hash(status)])
+            elsif ((status.skipped == true) || (status.failed == true))
+              events.concat([resource_status_to_event_hash(status)])
             end
-            puts "EVENTS COUNT: #{events.length}"
+            #puts "EVENTS COUNT: #{events.length}"
             events
           end
     }
@@ -93,13 +93,25 @@ Puppet::Reports.register_report(:puppetdb) do
   end
 
 
+  ## TODO: FIX docs
+
   ## Given an instance of `Puppet::Resource::Status` with
   ## a status of 'skipped', this method fabricates a PuppetDB
   ## event object representing the skipped resource.
-  def resource_status_to_skipped_event_hash(resource_status)
+  def resource_status_to_event_hash(resource_status)
+    status =
+        case
+        when resource_status.skipped == true
+          "skipped"
+        when resource_status.failed == true
+          "failure"
+        else
+          raise Puppet::DevError, "Can only create fabricated events for failed or skipped resource_statuses; got: #{resource_status}"
+        end
+
     add_report_v4_fields(resource_status,
       {
-        "status"            => "skipped",
+        "status"            => status,
         "timestamp"         => Puppet::Util::Puppetdb.to_wire_time(resource_status.time),
         "resource-type"     => resource_status.resource_type,
         "resource-title"    => resource_status.title,
