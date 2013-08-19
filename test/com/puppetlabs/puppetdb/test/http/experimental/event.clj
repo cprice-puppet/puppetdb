@@ -50,10 +50,12 @@
   (map #(utils/maptrans {[:old-value :new-value] stringify-keys} %) events))
 
 (defn expected-resource-event-response
-  [resource-event report-hash]
+  [resource-event report-hash conf-ver]
   (-> resource-event
-    ;; the examples don't include the report hash, so we munge it into place
+    ;; the examples don't include the report hash or config version,
+    ;; so we munge it into place
     (assoc-in [:report] report-hash)
+    (assoc-in [:configuration-version] conf-ver)
     ;; the timestamps are already strings, but calling to-string on them forces
     ;; them to be coerced to dates and then back to strings, which normalizes
     ;; the timezone so that it will match the value returned form the db.
@@ -61,12 +63,13 @@
     (dissoc :test-id)))
 
 (defn expected-resource-events-response
-  [resource-events report-hash]
-  (set (map #(expected-resource-event-response % report-hash) resource-events)))
+  [resource-events report-hash conf-ver]
+  (set (map #(expected-resource-event-response % report-hash conf-ver) resource-events)))
 
 (deftest query-by-report
   (let [basic         (:basic reports)
         report-hash   (store-example-report! basic (now))
+        conf-ver      (:configuration-version basic)
         basic-events  (get-events-map basic)]
 
     ;; TODO: test invalid requests
@@ -75,7 +78,8 @@
       (let [response (get-response ["=" "report" report-hash])
             expected (expected-resource-events-response
                         (:resource-events basic)
-                        report-hash)]
+                        report-hash
+                        conf-ver)]
         ;(println "RESPONSE:" response)
         (response-equal? response expected munge-event-values)))
 
@@ -93,8 +97,9 @@
         (fn []
           (let [response (get-response ["=" "report" report-hash] {"limit" 500})
                 expected (expected-resource-events-response
-              (:resource-events basic)
-              report-hash)]
+                            (:resource-events basic)
+                            report-hash
+                            conf-ver)]
             (response-equal? response expected munge-event-values)))))
 
     ;; NOTE: more exhaustive testing for these queries can be found in
@@ -106,14 +111,16 @@
           (let [response (get-response ["<" "timestamp" end-time])
                 expected (expected-resource-events-response
                             (utils/select-values basic-events [1 3])
-                            report-hash)]
+                            report-hash
+                            conf-ver)]
             (response-equal? response expected munge-event-values)))
         (testing "should support compound timestamp queries"
           (let [response (get-response ["and" [">" "timestamp" start-time]
                                               ["<" "timestamp" end-time]])
                 expected (expected-resource-events-response
                             (utils/select-values basic-events [3])
-                            report-hash)]
+                            report-hash
+                            conf-ver)]
             (response-equal? response expected munge-event-values)))))
 
     (testing "compound queries"
@@ -139,5 +146,6 @@
         (let [response  (get-response query)
               expected  (expected-resource-events-response
                           (utils/select-values basic-events matches)
-                          report-hash)]
+                          report-hash
+                          conf-ver)]
           (response-equal? response expected munge-event-values))))))

@@ -134,6 +134,7 @@
                                         AND reports.hash = latest_reports.report"
                                     "")
           sql (format (str "SELECT reports.certname,
+                                    reports.configuration_version,
                                     resource_events.report,
                                     resource_events.status,
                                     resource_events.timestamp,
