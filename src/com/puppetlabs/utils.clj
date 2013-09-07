@@ -142,6 +142,12 @@
   [seq elm]
   (some #(= elm %) seq))
 
+(defn contains-some
+  "If m `contains?` any of the keys in ks, returns the first such
+  key.  Otherwise returns nil."
+  [m ks]
+  (some #(if (contains? m %) %) ks))
+
 (defn mapvals
   "Return map `m`, with each value transformed by function `f`.
 

@@ -117,7 +117,7 @@
   supported on versions of the query API prior to v3."
   [app]
   (fn [{:keys [params] :as req}]
-    (if-let [param (some #(if (contains? params %) %) ["limit" "offset" "order-by"])]
+    (if-let [param (utils/contains-some params ["limit" "offset" "order-by"])]
       (pl-http/error-response (str "Unsupported query parameter '" param "'"))
       (app req))))
 
