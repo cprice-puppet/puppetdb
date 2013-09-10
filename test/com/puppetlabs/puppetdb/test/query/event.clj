@@ -211,6 +211,15 @@
             (is (= actual expected)
               (format "Results didn't match for query '%s'" query))))))
 
+    (testing "query for resources with 'null' containing class"
+      (let [expected  (expected-resource-events
+                         (utils/select-values basic-events [1 2])
+                         report-hash
+                         conf-version)
+            query     ]))
+
+
+
     (testing "compound queries"
       (testing "'or' equality queries"
         (doseq [[terms matches]
