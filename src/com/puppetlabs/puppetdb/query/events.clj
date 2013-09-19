@@ -138,6 +138,7 @@
       JOIN reports ON resource_events.report = reports.hash
       WHERE %s")
 
+
 ;; TODO docs
 (def distinct-select
   "SELECT %s
@@ -154,6 +155,7 @@
                GROUP BY certname, resource_type, resource_title, property) latest_events
            ON reports.certname = latest_events.certname
             AND resource_events.resource_type = latest_events.resource_type
+            AND resource_events.resource_title = latest_events.resource_title
             AND ((resource_events.property = latest_events.property) OR
                  (resource_events.property IS NULL AND latest_events.property IS NULL))
             AND resource_events.timestamp = latest_events.timestamp")
