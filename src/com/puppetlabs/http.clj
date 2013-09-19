@@ -154,3 +154,19 @@
                         [segs'
                          (conj strs (str delimiter (s/join delimiter segs')))]))]
        (second (reduce f [[] []] segments)))))
+
+(defn parse-boolean-query-param
+  ;; TODO: docs
+  "Parse the optional `include-total` query parameter in the paging options map,
+  and return an updated map with the correct boolean value."
+  [params k]
+  (if (contains? params k)
+    (let [val (params k)]
+      (cond
+        ;; If the original query string contains the query param w/o a
+        ;; a value, it will show up here as nil.  We assume that in that
+        ;; case, the caller intended to use it as a flag.
+        (= val nil)                  true
+        (Boolean/parseBoolean val)   true
+        :else                        false))
+    false))
