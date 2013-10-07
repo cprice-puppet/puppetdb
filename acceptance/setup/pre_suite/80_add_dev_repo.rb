@@ -4,21 +4,25 @@ if (test_config[:install_type] == :package)
   step "Add development repository on PuppetDB server" do
     case os
     when :debian
-      apt_url = "#{test_config[:package_repo_url]}/debian"
-
-      # TODO: this could be (maybe?) ported over to use the puppetlabs-apt module.
-      on database, "echo deb #{apt_url} $(lsb_release -sc) main >> /etc/apt/sources.list"
-      on database, "curl #{apt_url}/pubkey.gpg |apt-key add -"
+      result = on database, "lsb_release -sc"
+      deb_flavor = result.stdout
+      apt_list_url = "#{test_config[:package_repo_url]}/deb/pl-puppetdb-#{test_config[:git_ref]}-#{deb_flavor}.list"
+      apt_list_file_path = "/etc/apt/sources.list.d/puppetdb-prerelease.list"
+      on database, "wget #{apt_list_url} > #{apt_list_file_path}"
+      result = on database, "cat #{apt_list_file_path}"
+      Log.notify("APT LIST FILE CONTENTS:\n#{result.stdout}\n")
       on database, "apt-get update"
     when :redhat
-      yum_repo = <<-REPO
-[puppetlabs-development]
-name=Puppet Labs Development - $basearch
-baseurl=#{test_config[:package_repo_url]}/el/$releasever/products/$basearch
-enabled=1
-gpgcheck=0
-      REPO
-      Log.notify("Yum repo definition.\n\n#{yum_repo}\n\n")
+      # TODO: this code assumes that we are always running a 64-bit CentOS.  Will
+      #  break with Fedora or RHEL.
+      result = on database, "facter operatingsystemmajrelease"
+      el_version = result.stdout
+      yum_repo_url = "#{test_config[:package_repo_url]}/rpm/pl-puppetdb-#{test_config[:git_ref]}-el-#{el_version}-x86_64.repo"
+      yum_repo_file_path = "/etc/yum.repos.d/puppetlabs-prerelease.repo"
+      on database, "wget #{yum_repo_url} > #{yum_repo_file_path}"
+
+      result = on database, "cat #{yum_repo_file_path}"
+      Log.notify("Yum REPO DEFINITION:\n\n#{result.sdtout}\n\n")
       create_remote_file database, '/etc/yum.repos.d/puppetlabs-prerelease.repo', yum_repo
     else
       raise ArgumentError, "Unsupported OS '#{os}'"
