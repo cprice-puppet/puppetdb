@@ -8,7 +8,7 @@ if (test_config[:install_type] == :package)
       deb_flavor = result.stdout
       apt_list_url = "#{test_config[:package_repo_url]}/deb/pl-puppetdb-#{test_config[:git_ref]}-#{deb_flavor}.list"
       apt_list_file_path = "/etc/apt/sources.list.d/puppetdb-prerelease.list"
-      on database, "wget #{apt_list_url} > #{apt_list_file_path}"
+      on database, "curl \"#{apt_list_url}\" -o #{apt_list_file_path}"
       result = on database, "cat #{apt_list_file_path}"
       Log.notify("APT LIST FILE CONTENTS:\n#{result.stdout}\n")
       on database, "apt-get update"
@@ -19,7 +19,7 @@ if (test_config[:install_type] == :package)
       el_version = result.stdout
       yum_repo_url = "#{test_config[:package_repo_url]}/rpm/pl-puppetdb-#{test_config[:git_ref]}-el-#{el_version}-x86_64.repo"
       yum_repo_file_path = "/etc/yum.repos.d/puppetlabs-prerelease.repo"
-      on database, "wget #{yum_repo_url} > #{yum_repo_file_path}"
+      on database, "curl \"#{yum_repo_url}\" -o #{yum_repo_file_path}"
 
       result = on database, "cat #{yum_repo_file_path}"
       Log.notify("Yum REPO DEFINITION:\n\n#{result.sdtout}\n\n")
