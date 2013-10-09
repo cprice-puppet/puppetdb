@@ -23,7 +23,6 @@ if (test_config[:install_type] == :package)
 
       result = on database, "cat #{yum_repo_file_path}"
       Log.notify("Yum REPO DEFINITION:\n\n#{result.stdout}\n\n")
-      create_remote_file database, '/etc/yum.repos.d/puppetlabs-prerelease.repo', yum_repo
     else
       raise ArgumentError, "Unsupported OS '#{os}'"
     end
