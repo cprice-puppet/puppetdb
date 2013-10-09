@@ -6,7 +6,7 @@ if (test_config[:install_type] == :package)
     when :debian
       result = on database, "lsb_release -sc"
       deb_flavor = result.stdout
-      apt_list_url = "#{test_config[:package_repo_url]}/deb/pl-puppetdb-#{test_config[:git_ref]}-#{deb_flavor}.list"
+      apt_list_url = "#{test_config[:package_repo_url]}/repo_configs/deb/pl-puppetdb-#{test_config[:git_ref]}-#{deb_flavor}.list"
       apt_list_file_path = "/etc/apt/sources.list.d/puppetdb-prerelease.list"
       on database, "curl \"#{apt_list_url}\" -o #{apt_list_file_path}"
       result = on database, "cat #{apt_list_file_path}"
@@ -14,10 +14,10 @@ if (test_config[:install_type] == :package)
       on database, "apt-get update"
     when :redhat
       # TODO: this code assumes that we are always running a 64-bit CentOS.  Will
-      #  break with Fedora or RHEL.
+      #  break with Fedora.
       result = on database, "facter operatingsystemmajrelease"
       el_version = result.stdout
-      yum_repo_url = "#{test_config[:package_repo_url]}/rpm/pl-puppetdb-#{test_config[:git_ref]}-el-#{el_version}-x86_64.repo"
+      yum_repo_url = "#{test_config[:package_repo_url]}/repo_configs/rpm/pl-puppetdb-#{test_config[:git_ref]}-el-#{el_version}-x86_64.repo"
       yum_repo_file_path = "/etc/yum.repos.d/puppetlabs-prerelease.repo"
       on database, "curl \"#{yum_repo_url}\" -o #{yum_repo_file_path}"
 
