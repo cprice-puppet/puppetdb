@@ -109,6 +109,10 @@ in your hash; the environment variable names are the same but uppercased
   Specify the git repository and reference for where we are to download the
   PuppetDB source code.
 
+* `:puppetdb_git_ref` (`REF`) :
+  Specify the specific git ref that the tests should be run against.  This should
+  almost always be passed in by the Jenkins job, and not overridden by configuration.
+
 ## Beaker Specific Options
 
 These options are only environment variables, and are specific to the `test:beaker` rake task.
