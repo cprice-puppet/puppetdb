@@ -5,7 +5,7 @@ if (test_config[:install_type] == :package)
     case os
     when :debian
       result = on database, "lsb_release -sc"
-      deb_flavor = result.stdout
+      deb_flavor = result.stdout.chomp
       apt_list_url = "#{test_config[:package_repo_url]}/repo_configs/deb/pl-puppetdb-#{test_config[:git_ref]}-#{deb_flavor}.list"
       apt_list_file_path = "/etc/apt/sources.list.d/puppetdb-prerelease.list"
       on database, "curl \"#{apt_list_url}\" -o #{apt_list_file_path}"
@@ -16,13 +16,13 @@ if (test_config[:install_type] == :package)
       # TODO: this code assumes that we are always running a 64-bit CentOS.  Will
       #  break with Fedora.
       result = on database, "facter operatingsystemmajrelease"
-      el_version = result.stdout
+      el_version = result.stdout.chomp
       yum_repo_url = "#{test_config[:package_repo_url]}/repo_configs/rpm/pl-puppetdb-#{test_config[:git_ref]}-el-#{el_version}-x86_64.repo"
       yum_repo_file_path = "/etc/yum.repos.d/puppetlabs-prerelease.repo"
       on database, "curl \"#{yum_repo_url}\" -o #{yum_repo_file_path}"
 
       result = on database, "cat #{yum_repo_file_path}"
-      Log.notify("Yum REPO DEFINITION:\n\n#{result.sdtout}\n\n")
+      Log.notify("Yum REPO DEFINITION:\n\n#{result.stdout}\n\n")
       create_remote_file database, '/etc/yum.repos.d/puppetlabs-prerelease.repo', yum_repo
     else
       raise ArgumentError, "Unsupported OS '#{os}'"
