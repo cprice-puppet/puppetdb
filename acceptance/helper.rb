@@ -54,12 +54,26 @@ module PuppetDBExtensions
           "'purge packages and perform exhaustive cleanup after run'",
           "PUPPETDB_PURGE_AFTER_RUN", :false)
 
+    package_build_host =
+        get_option_value(options[:puppetdb_package_build_host],
+          nil,
+          "'hostname for package build output'",
+          "PUPPETDB_PACKAGE_BUILD_HOST",
+          "builds.puppetlabs.lan")
+
+    package_repo_host =
+        get_option_value(options[:puppetdb_package_repo_host],
+          nil,
+          "'hostname for yum/apt repos'",
+          "PUPPETDB_PACKAGE_REPO_HOST",
+          "neptune.puppetlabs.lan")
+
     package_repo_url =
         get_option_value(options[:puppetdb_package_repo_url],
           nil,
           "'base URL for yum/apt repos'",
           "PUPPETDB_PACKAGE_REPO_URL",
-          "http://neptune.puppetlabs.lan/dev/puppetdb/master")
+          "http://#{package_repo_host}/dev/puppetdb/master")
 
     puppetdb_repo_puppet = get_option_value(options[:puppetdb_repo_puppet],
       nil, "git repo for puppet source installs", "PUPPETDB_REPO_PUPPET", nil)
@@ -88,6 +102,8 @@ module PuppetDBExtensions
       :expected_deb_version => expected_deb_version,
       :use_proxies => use_proxies == :true,
       :purge_after_run => purge_after_run == :true,
+      :package_build_host => package_build_host,
+      :package_repo_host => package_repo_host,
       :package_repo_url => package_repo_url,
       :repo_puppet => puppetdb_repo_puppet,
       :repo_hiera => puppetdb_repo_hiera,
