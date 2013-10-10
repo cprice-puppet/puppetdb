@@ -1,7 +1,7 @@
 if (test_config[:install_type] == :package)
   os = test_config[:os_families][database.name]
 
-  sed_cmd = "sed 's/#{Regex.escape(test_config[:package_build_host])}/#{Regexp.escape(test_config[:package_repo_host])}/'"
+  sed_cmd = "sed 's/#{Regexp.escape(test_config[:package_build_host])}/#{Regexp.escape(test_config[:package_repo_host])}/'"
 
   step "Add development repository on PuppetDB server" do
     case os
