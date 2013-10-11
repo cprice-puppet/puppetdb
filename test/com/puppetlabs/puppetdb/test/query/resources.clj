@@ -339,7 +339,7 @@
 
       (testing "defaults to ascending"
         (let [expected [r1 r3 r4 r2]
-              actual   (query-resources ["=" ["node" "active"] true] {:order-by [{:field "line"}]})]
+              actual   (query-resources ["=" ["node" "active"] true] {:order-by [{:field :line}]})]
           (is (= actual expected))))
 
       (testing "alphabetical fields"

@@ -52,7 +52,7 @@
     (throw (IllegalArgumentException.
       (str "Illegal value '" bad-order-by "' in :order-by; "
          "missing required key 'field'.")))
-    order-by))
+    (map #(update-in % [:field] keyword) order-by)))
 
 (defn validate-no-invalid-order-by-fields
   "Validates that each map in the order-by list does not contain any invalid
@@ -149,15 +149,15 @@
    the list of fields.  Throws an exception if validation fails."
   [columns paging-options]
   {:pre [(sequential? columns)
-         (every? string? columns)
+         (every? keyword? columns)
          ((some-fn nil? map?) paging-options)]}
   (let [columns (map underscores->dashes columns)]
     (doseq [field (map :field (:order-by paging-options))]
       (when-not (seq-contains? columns field)
         (throw (IllegalArgumentException.
           (format "Unrecognized column '%s' specified in :order-by; Supported columns are '%s'"
-                  field
-                  (string/join "', '" columns))))))))
+                  (name field)
+                  (string/join "', '" (map name columns)))))))))
 
 (defn requires-paging?
   "Given a paging-options map, return true if the query requires paging
