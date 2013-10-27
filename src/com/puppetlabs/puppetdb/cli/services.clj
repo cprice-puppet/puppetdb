@@ -43,7 +43,6 @@
 ;;   maintain acceptable performance.
 ;;
 (ns com.puppetlabs.puppetdb.cli.services
-  (:import [java.security KeyStore])
   (:require [com.puppetlabs.puppetdb.scf.storage :as scf-store]
             [com.puppetlabs.puppetdb.command :as command]
             [com.puppetlabs.puppetdb.command.dlo :as dlo]
@@ -52,20 +51,20 @@
 ;            [com.puppetlabs.jetty :as jetty]
             ;; TODO: shouldn't be referencing a trapperkeeper service directly
             [trapperkeeper.jetty9.jetty9-core :as jetty]
+            [trapperkeeper.jetty9.jetty9-config :as jetty-config]
             [com.puppetlabs.mq :as mq]
             [com.puppetlabs.utils :as pl-utils]
             [clojure.java.jdbc :as sql]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
             [com.puppetlabs.cheshire :as json]
-            [com.puppetlabs.puppetdb.http.server :as server]
-            [com.puppetlabs.ssl :as ssl])
+            [com.puppetlabs.puppetdb.http.server :as server])
   (:use [clojure.java.io :only [file]]
         [clj-time.core :only [ago secs minutes days]]
         [overtone.at-at :only (mk-pool interspaced)]
         [com.puppetlabs.time :only [to-secs to-millis parse-period format-period period?]]
         [com.puppetlabs.jdbc :only (with-transacted-connection)]
-        [com.puppetlabs.utils :only (cli! configure-logging! inis-to-map with-error-delivery missing?)]
+        [com.puppetlabs.utils :only (cli! configure-logging! inis-to-map with-error-delivery)]
         [com.puppetlabs.repl :only (start-repl)]
         [com.puppetlabs.puppetdb.scf.migrate :only [migrate!]]
         [com.puppetlabs.puppetdb.version :only [version update-info]]
@@ -215,65 +214,6 @@
                              (max 1))]
     (update-in config [:command-processing :threads] #(or % default-nthreads))))
 
-(defn configure-web-server-ssl-from-pems
-  "Configures the web server's SSL settings based on Puppet PEM files, rather than
-  via a java keystore (jks) file.  The configuration map returned by this function
-  will have overwritten any existing keystore-related settings to use in-memory
-  KeyStore objects, which are constructed based on the values of
-  `:ssl-key`, `:ssl-cert`, and `:ssl-ca-cert` from
-  the input map.  The output map does not include the `:puppet-*` keys, as they
-  are not meaningful to the web server implementation."
-  [{:keys [ssl-key ssl-cert ssl-ca-cert] :as jetty}]
-  {:pre  [ssl-key
-          ssl-cert
-          ssl-ca-cert]
-   :post [(map? %)
-          (instance? KeyStore (:keystore %))
-          (string? (:key-password %))
-          (instance? KeyStore (:truststore %))
-          (missing? % :trust-password :ssl-key :ssl-cert :ssl-ca-cert)]}
-  (let [old-ssl-config-keys [:keystore :truststore :key-password :trust-password]
-        old-ssl-config      (select-keys jetty old-ssl-config-keys)]
-    (when (pos? (count old-ssl-config))
-      (log/warn (format "Found settings for both keystore-based and Puppet PEM-based SSL; using PEM-based settings, ignoring %s"
-                  (keys old-ssl-config)))))
-  (let [truststore  (-> (ssl/keystore)
-                        (ssl/assoc-cert-file! "PuppetDB CA" ssl-ca-cert))
-        keystore-pw (pl-utils/uuid)
-        keystore    (-> (ssl/keystore)
-                        (ssl/assoc-private-key-file! "PuppetDB Agent Private Key" ssl-key keystore-pw ssl-cert))]
-    (-> jetty
-        (dissoc :ssl-key :ssl-ca-cert :ssl-cert :trust-password)
-        (assoc :keystore keystore)
-        (assoc :key-password keystore-pw)
-        (assoc :truststore truststore))))
-
-(defn jetty7-minimum-threads
-  "Given a thread count, make sure it meets the minimum count for Jetty 7 to
-  operate. It will return a warning if it does not, and return the minimum
-  instead of the original value.
-
-  This is to work-around a bug/feature in Jetty 7 that blocks the web server
-  when max-threads is less than the number of cpus on a system.
-
-  See: http://projects.puppetlabs.com/issues/22168 for more details.
-
-  This bug is solved in Jetty 9, so this check can probably be removed if we
-  upgrade."
-  ([threads]
-  (jetty7-minimum-threads threads (inc (pl-utils/num-cpus))))
-
-  ([threads min-threads]
-  {:pre [(pos? threads)
-         (pos? min-threads)]
-   :post [(pos? %)]}
-  (if (< threads min-threads)
-    (do
-      (log/warn (format "max-threads = %s is less than the minium allowed on this system for Jetty 7 to operate. This will be automatically increased to the safe minimum: %s"
-                  threads min-threads))
-      min-threads)
-    threads)))
-
 (defn build-whitelist-authorizer
   "Build a function that will authorize requests based on the supplied
   certificate whitelist (see `cn-whitelist->authorizer` for more
@@ -288,28 +228,6 @@
         (do
           (log/warnf "%s rejected by certificate whitelist %s" ssl-client-cn whitelist)
           false)))))
-
-(defn configure-web-server
-  "Update the supplied config map with information about the HTTP webserver to
-  start. This will specify client auth, and add a default host/port
-  http://puppetdb:8080 if none are supplied (and SSL is not specified)."
-  [{:keys [jetty] :as config}]
-  {:pre  [(map? config)]
-   :post [(map? %)
-          (missing? (:jetty %) :ssl-key :ssl-cert :ssl-ca-cert)]}
-  (let [initial-config  {:max-threads 50}
-        merged-jetty    (merge initial-config jetty)
-        pem-required-keys [:ssl-key :ssl-cert :ssl-ca-cert]
-        pem-config        (select-keys jetty pem-required-keys)]
-    (assoc config :jetty
-      (-> (condp = (count pem-config)
-            3 (configure-web-server-ssl-from-pems jetty)
-            0 jetty
-            (throw (IllegalArgumentException.
-                     (format "Found SSL config options: %s; If configuring SSL from Puppet PEM files, you must provide all of the following options: %s"
-                        (keys pem-config) pem-required-keys))))
-          (assoc :client-auth :need)
-          (assoc :max-threads (jetty7-minimum-threads (:max-threads merged-jetty)))))))
 
 (defn configure-gc-params
   "Helper function that munges the supported permutations of our GC-related
@@ -426,7 +344,6 @@
     (-> (merge initial-config (inis-to-map path))
         (configure-logging!)
         (configure-commandproc-threads)
-        (configure-web-server)
         (configure-database)
         (configure-gc-params)
         (set-global-configuration!))))
@@ -516,7 +433,8 @@
                               app         (server/build-app :globals globals :authorized? authorized?)]
                           (log/info "Starting query server")
                           (future (with-error-delivery error
-                                    (jetty/run-jetty app jetty))))
+                                    (jetty/run-jetty app
+                                      (jetty-config/configure-web-server jetty)))))
           job-pool      (mk-pool)]
 
       ;; Pretty much this helper just knows our job-pool and gc-interval
