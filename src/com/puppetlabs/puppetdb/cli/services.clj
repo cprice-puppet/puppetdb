@@ -49,7 +49,9 @@
             [com.puppetlabs.puppetdb.command.dlo :as dlo]
             [com.puppetlabs.puppetdb.query.population :as pop]
             [com.puppetlabs.jdbc :as pl-jdbc]
-            [com.puppetlabs.jetty :as jetty]
+;            [com.puppetlabs.jetty :as jetty]
+            ;; TODO: shouldn't be referencing a trapperkeeper service directly
+            [trapperkeeper.jetty9.jetty9-core :as jetty]
             [com.puppetlabs.mq :as mq]
             [com.puppetlabs.utils :as pl-utils]
             [clojure.java.jdbc :as sql]
