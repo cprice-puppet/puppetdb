@@ -52,6 +52,7 @@
             ;; TODO: shouldn't be referencing a trapperkeeper service directly
             [trapperkeeper.jetty9.jetty9-core :as jetty]
             [trapperkeeper.jetty9.jetty9-config :as jetty-config]
+            [trapperkeeper.config.config-core :as config]
             [com.puppetlabs.mq :as mq]
             [com.puppetlabs.utils :as pl-utils]
             [clojure.java.jdbc :as sql]
@@ -64,7 +65,7 @@
         [overtone.at-at :only (mk-pool interspaced)]
         [com.puppetlabs.time :only [to-secs to-millis parse-period format-period period?]]
         [com.puppetlabs.jdbc :only (with-transacted-connection)]
-        [com.puppetlabs.utils :only (cli! configure-logging! inis-to-map with-error-delivery)]
+        [com.puppetlabs.utils :only (cli! configure-logging! with-error-delivery)]
         [com.puppetlabs.repl :only (start-repl)]
         [com.puppetlabs.puppetdb.scf.migrate :only [migrate!]]
         [com.puppetlabs.puppetdb.version :only [version update-info]]
@@ -331,22 +332,14 @@
   Also accepts an optional map argument 'initial-config'; if
   provided, any initial values in this map will be included
   in the resulting config map."
-  ([path]
-    (parse-config! path {}))
-  ([path initial-config]
-    {:pre [(string? path)
-           (map? initial-config)]}
-    (let [file (file path)]
-      (when-not (.canRead file)
-        (throw (IllegalArgumentException.
-                (format "Configuration path '%s' must exist and must be readable." path)))))
-
-    (-> (merge initial-config (inis-to-map path))
-        (configure-logging!)
-        (configure-commandproc-threads)
-        (configure-database)
-        (configure-gc-params)
-        (set-global-configuration!))))
+  [path]
+  {:pre [(string? path)]}
+  (-> (config/load-config! path)
+      (configure-logging!)
+      (configure-commandproc-threads)
+      (configure-database)
+      (configure-gc-params)
+      (set-global-configuration!)))
 
 (defn on-shutdown
   "General cleanup when a shutdown request is received."
@@ -369,7 +362,9 @@
                                                       required-cli-options)
         initial-config                             {:debug (:debug options)}
         {:keys [jetty database read-database global command-processing]
-            :as config}                            (parse-config! (:config options) initial-config)
+            :as config}                            (merge
+                                                     initial-config
+                                                     (parse-config! (:config options)))
         product-name                               (normalize-product-name (get global :product-name "puppetdb"))
         vardir                                     (validate-vardir (:vardir global))
         update-server                              (:update-server global "http://updates.puppetlabs.com/check-for-updates")
