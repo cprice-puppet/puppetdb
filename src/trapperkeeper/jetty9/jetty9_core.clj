@@ -13,7 +13,8 @@
            (javax.servlet.http HttpServletRequest HttpServletResponse)
            [java.util.concurrent Executors])
   (:require [ring.util.servlet :as servlet]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [trapperkeeper.jetty9.jetty9-config :as jetty-config])
   (:use     [clojure.string :only (split trim)]
             [com.puppetlabs.utils :only (compare-jvm-versions)]
             [clojure.pprint :only (pprint)]))
@@ -153,7 +154,9 @@
   ;  :client-auth  - SSL client certificate authenticate, may be set to :need,
   ;                  :want or :none (defaults to :none)"
   [options]
-  (let [^Server s                     (create-server (dissoc options :configurator))
+  {:pre [(map? options)]}
+  (let [options                       (jetty-config/configure-web-server options)
+        ^Server s                     (create-server (dissoc options :configurator))
         ^ContextHandlerCollection chc (ContextHandlerCollection.)
         ^HandlerCollection hc         (HandlerCollection.)]
     (.setHandlers hc (into-array Handler [chc]))
@@ -161,8 +164,6 @@
     (when-let [configurator (:configurator options)]
       (configurator s))
     (.start s)
-    (when (:join? options true)
-      (.join s))
     {:server   s
      :handlers chc}))
 
@@ -188,8 +189,8 @@
 ;; be removed once we've ported over to trapperkeeper
 (defn run-jetty
   [app options]
-  (let [join?     (options :join?)
-        webserver (start-webserver (merge options {:join? false}))]
+  (let [webserver (start-webserver options)
+        join?     (options :join?)]
     (add-ring-handler webserver app "")
     (when join?
       (join webserver))

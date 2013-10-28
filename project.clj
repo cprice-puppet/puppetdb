@@ -61,13 +61,14 @@
                  [clj-http "0.5.3"]
                  ;; we get the servlet API from the trapperkeeper webserver
                  [ring/ring-core "1.2.0" :exclusions [javax.servlet/servlet-api]]
-                 ;; these next two should be moved to trapperkeeper-jetty9
-                 ;[ring/ring-jetty-adapter "1.1.8"]
-                 [ring/ring-servlet "1.2.0" :exclusions [javax.servlet/servlet-api]]
-                 [org.eclipse.jetty/jetty-server "9.0.5.v20130815"]
-
                  [org.apache.commons/commons-compress "1.4.1"]
-                 [org.bouncycastle/bcpkix-jdk15on "1.49"]]
+                 [org.bouncycastle/bcpkix-jdk15on "1.49"]
+
+                 ;; these are all trapperkeeper dependencies that should not live
+                 ;; in this project file.
+                 [prismatic/plumbing "0.1.0"]
+                 [ring/ring-servlet "1.2.0" :exclusions [javax.servlet/servlet-api]]
+                 [org.eclipse.jetty/jetty-server "9.0.5.v20130815"]]
 
   ;;The below test-selectors is basically using the PUPPETDB_DBTYPE
   ;;environment variable to be the test selector.  The selector below

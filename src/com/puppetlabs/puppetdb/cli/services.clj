@@ -48,18 +48,15 @@
             [com.puppetlabs.puppetdb.command.dlo :as dlo]
             [com.puppetlabs.puppetdb.query.population :as pop]
             [com.puppetlabs.jdbc :as pl-jdbc]
-;            [com.puppetlabs.jetty :as jetty]
-            ;; TODO: shouldn't be referencing a trapperkeeper service directly
-            [trapperkeeper.jetty9.jetty9-core :as jetty]
-            [trapperkeeper.jetty9.jetty9-config :as jetty-config]
-            [trapperkeeper.config.config-core :as config]
             [com.puppetlabs.mq :as mq]
             [com.puppetlabs.utils :as pl-utils]
             [clojure.java.jdbc :as sql]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
             [com.puppetlabs.cheshire :as json]
-            [com.puppetlabs.puppetdb.http.server :as server])
+            [com.puppetlabs.puppetdb.http.server :as server]
+            ;; TODO: trapperkeeper stuff should probably live in a separate namespace
+            [trapperkeeper.trapperkeeper-core :as trapperkeeper])
   (:use [clojure.java.io :only [file]]
         [clj-time.core :only [ago secs minutes days]]
         [overtone.at-at :only (mk-pool interspaced)]
@@ -69,7 +66,11 @@
         [com.puppetlabs.repl :only (start-repl)]
         [com.puppetlabs.puppetdb.scf.migrate :only [migrate!]]
         [com.puppetlabs.puppetdb.version :only [version update-info]]
-        [com.puppetlabs.puppetdb.command.constants :only [command-names]]))
+        [com.puppetlabs.puppetdb.command.constants :only [command-names]]
+        ;; TODO: trapperkeeper stuff should probably live in a separate namespace
+        [plumbing.core :only [fnk]]
+        [trapperkeeper.jetty9.jetty9-service :only [jetty9-service]]
+        [trapperkeeper.config.config-service :only [config-service]]))
 
 (def cli-description "Main PuppetDB daemon")
 
@@ -325,16 +326,13 @@
   (def configuration config)
   config)
 
-(defn parse-config!
-  "Parses the given config file/directory and configures its various
-  subcomponents.
-
-  Also accepts an optional map argument 'initial-config'; if
-  provided, any initial values in this map will be included
-  in the resulting config map."
-  [path]
-  {:pre [(string? path)]}
-  (-> (config/load-config! path)
+(defn process-config!
+  "Process the initial configuration map; this includes validation,
+  initializing various services, transforming certain configuration
+  settings to their canonical representations, etc."
+  [config]
+  {:pre [(map? config)]}
+  (-> config
       (configure-logging!)
       (configure-commandproc-threads)
       (configure-database)
@@ -355,16 +353,13 @@
 (def required-cli-options
   [:config])
 
-(defn -main
-  [& args]
-  (let [[options _]                                (cli! args
-                                                      supported-cli-options
-                                                      required-cli-options)
-        initial-config                             {:debug (:debug options)}
-        {:keys [jetty database read-database global command-processing]
-            :as config}                            (merge
-                                                     initial-config
-                                                     (parse-config! (:config options)))
+(defn run-puppetdb-services
+  [config {:keys [add-ring-handler join] :as webserver-fns}]
+  {:pre [(map? config)
+         (ifn? add-ring-handler)
+         (ifn? join)]}
+  (let [{:keys [jetty database read-database global command-processing]
+             :as config}                           (process-config! config)
         product-name                               (normalize-product-name (get global :product-name "puppetdb"))
         vardir                                     (validate-vardir (:vardir global))
         update-server                              (:update-server global "http://updates.puppetlabs.com/check-for-updates")
@@ -428,8 +423,8 @@
                               app         (server/build-app :globals globals :authorized? authorized?)]
                           (log/info "Starting query server")
                           (future (with-error-delivery error
-                                    (jetty/run-jetty app
-                                      (jetty-config/configure-web-server jetty)))))
+                                    (add-ring-handler app "")
+                                    (join))))
           job-pool      (mk-pool)]
 
       ;; Pretty much this helper just knows our job-pool and gc-interval
@@ -463,3 +458,31 @@
 
         ;; Now throw the exception so the top-level handler will see it
         (throw exception)))))
+
+;; TODO: this trapperkeeper-specific stuff should probably
+;; live in a separate namespace
+(defn- puppetdb-service
+  []
+  {:puppetdb-service
+   (fnk [[:config-service config]
+         [:webserver-service add-ring-handler join]]
+     (run-puppetdb-services (config) {:add-ring-handler add-ring-handler
+                                      :join join})
+     {})})
+
+(defn -main
+  [& args]
+  ;; TODO: move to trapperkeeper
+  (let [[cli-options _]   (cli! args
+                            supported-cli-options
+                            required-cli-options)
+          initial-config  {:debug (:debug cli-options)}
+
+        ;; TODO: this code shouldn't have to explicitly register the services;
+        ;; trapperkeeper should have a bootstrap function that reads them from a config
+        ;; file.
+        app (trapperkeeper/build-app
+              [(puppetdb-service)
+               (jetty9-service)
+               (config-service (:config cli-options) initial-config)])]
+    (trapperkeeper/run app)))
