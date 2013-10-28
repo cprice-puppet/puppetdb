@@ -3,7 +3,10 @@
             [com.puppetlabs.puppetdb.fixtures :as fixt]
             [com.puppetlabs.puppetdb.testutils :as testutils]
             [fs.core :as fs]
-            [com.puppetlabs.puppetdb.cli.services :as svcs]))
+            [com.puppetlabs.puppetdb.cli.services :as svcs]
+            ;; TODO: not sure how I feel about referencing the trapperkeeper
+            ;; service implementation directly here
+            [trapperkeeper.config.config-core :as config]))
 
 (defn launch-puppetdb
   "Starts a puppetdb instance with defaults from config.sample.ini.  This is useful
@@ -24,7 +27,7 @@
   (let [new-config-file (testutils/temp-file "config" ".ini")
         config-path (fs/absolute-path new-config-file)]
     (println "Writing current config to" config-path)
-    (utils/spit-ini new-config-file (merge-with merge (utils/ini-to-map config) config-overrides))
+    (utils/spit-ini new-config-file (merge-with merge (config/ini-to-map config) config-overrides))
     (svcs/-main "--config" config-path)))
 
 (defn launch-mem-puppetdb

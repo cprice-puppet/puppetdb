@@ -2,7 +2,10 @@
   (:import (org.apache.activemq.broker BrokerService))
   (:require [com.puppetlabs.mq :as mq]
             [com.puppetlabs.http :as pl-http]
-            [com.puppetlabs.jetty :as jetty]
+;            [com.puppetlabs.jetty :as jetty]
+            ;; TODO: not sure how I feel about referencing the trapperkeeper
+            ;; service implementation directly here
+            [trapperkeeper.jetty9.jetty9-core :as jetty]
             [com.puppetlabs.puppetdb.query.paging :as paging]
             [clojure.string :as string]
             [clojure.java.jdbc :as sql]

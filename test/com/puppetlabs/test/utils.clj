@@ -4,6 +4,9 @@
   (:use [com.puppetlabs.utils]
         [com.puppetlabs.puppetdb.testutils]
         [metrics.timers :only (timer)]
+        ;; TODO: not sure how I feel about referencing the trapperkeeper
+        ;; service implementation directly here
+        [trapperkeeper.config.config-core :as config]
         [clojure.test]))
 
 (deftest array?-test
@@ -194,46 +197,47 @@
       (is (= "8843d7f92416211de9ebb963ff4ce28125932878"
              (utf8-string->sha1 "foobar"))))))
 
-(deftest ini-parsing
-  (testing "Parsing ini files"
-    (testing "should work for a single file"
-      (let [tf (fs/temp-file)]
-        (spit tf "[foo]\nbar=baz")
-
-        (testing "when specified as a file object"
-          (is (= (inis-to-map tf)
-                 {:foo {:bar "baz"}})))
-
-        (testing "when specified as a string"
-          (is (= (inis-to-map (fs/absolute-path tf))
-                 {:foo {:bar "baz"}})))))
-
-    (testing "should work for a directory"
-      (let [td (fs/temp-dir)]
-        (testing "when no matching files exist"
-          (is (= (inis-to-map td) {})))
-
-        (spit (fs/file td "a.ini") "[foo]\nbar=baz")
-
-        (testing "when only a single matching file exists"
-          (is (= (inis-to-map td)
-                 {:foo {:bar "baz"}})))
-
-        ;; Now add a second file
-        (spit (fs/file td "b.ini") "[bar]\nbar=baz")
-
-        (testing "when multiple matching files exist"
-          (is (= (inis-to-map td)
-                 {:foo {:bar "baz"}
-                  :bar {:bar "baz"}})))
-
-        ;; Now add a file that clobbers data from another
-        (spit (fs/file td "c.ini") "[bar]\nbar=goo")
-
-        (testing "when multiple matching files exist"
-          (is (= (inis-to-map td)
-                 {:foo {:bar "baz"}
-                  :bar {:bar "goo"}})))))))
+;; TODO: move this to trapperkeeper-config
+;(deftest ini-parsing
+;  (testing "Parsing ini files"
+;    (testing "should work for a single file"
+;      (let [tf (fs/temp-file)]
+;        (spit tf "[foo]\nbar=baz")
+;
+;        (testing "when specified as a file object"
+;          (is (= (inis-to-map tf)
+;                 {:foo {:bar "baz"}})))
+;
+;        (testing "when specified as a string"
+;          (is (= (inis-to-map (fs/absolute-path tf))
+;                 {:foo {:bar "baz"}})))))
+;
+;    (testing "should work for a directory"
+;      (let [td (fs/temp-dir)]
+;        (testing "when no matching files exist"
+;          (is (= (inis-to-map td) {})))
+;
+;        (spit (fs/file td "a.ini") "[foo]\nbar=baz")
+;
+;        (testing "when only a single matching file exists"
+;          (is (= (inis-to-map td)
+;                 {:foo {:bar "baz"}})))
+;
+;        ;; Now add a second file
+;        (spit (fs/file td "b.ini") "[bar]\nbar=baz")
+;
+;        (testing "when multiple matching files exist"
+;          (is (= (inis-to-map td)
+;                 {:foo {:bar "baz"}
+;                  :bar {:bar "baz"}})))
+;
+;        ;; Now add a file that clobbers data from another
+;        (spit (fs/file td "c.ini") "[bar]\nbar=goo")
+;
+;        (testing "when multiple matching files exist"
+;          (is (= (inis-to-map td)
+;                 {:foo {:bar "baz"}
+;                  :bar {:bar "goo"}})))))))
 
 (deftest cert-utils
   (testing "extracting cn from a dn"
@@ -381,7 +385,7 @@
 (deftest test-spit-ini
   (let [tf (fs/temp-file)]
     (spit tf "[foo]\nbar=baz\n[bar]\nfoo=baz")
-    (let [ini-map (ini-to-map tf)]
+    (let [ini-map (config/ini-to-map tf)]
       (is (= ini-map
              {:foo {:bar "baz"}
               :bar {:foo "baz"}}))
@@ -392,7 +396,7 @@
                                     (assoc-in [:bar :foo] "baz also changed")))
           (is (= {:foo {:bar "baz changed"}
                   :bar {:foo "baz also changed"}}
-                 (ini-to-map result-file)))))
+                 (config/ini-to-map result-file)))))
       (testing "adding a new section to an existing ini"
         (let [result-file (fs/temp-file)]
           (spit-ini result-file (assoc-in ini-map [:baz :foo] "bar"))

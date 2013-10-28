@@ -5,7 +5,7 @@
   (:use [clojure.java.io :only (reader file)]
         [com.puppetlabs.utils :only (parse-int)]))
 
-(defn- ini-to-map
+(defn ini-to-map
   "Takes a .ini filename and returns a nested map of
   fully-interpolated values. Strings that look like integers are
   returned as integers, and all section names and keys are returned as

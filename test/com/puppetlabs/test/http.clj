@@ -1,9 +1,12 @@
 (ns com.puppetlabs.test.http
   (:require [clj-http.client :as client]
-            [cheshire.core :as json])
+            [cheshire.core :as json]
+;            ;; TODO: not sure how I feel about referencing the trapperkeeper
+;            ;; service implementation directly here
+;            [trapperkeeper.jetty9.jetty9-core :as jetty])
   (:import [java.io InputStream StringWriter])
   (:use [com.puppetlabs.http]
-        [com.puppetlabs.jetty]
+;        [com.puppetlabs.jetty]
         [com.puppetlabs.testutils.logging]
         [com.puppetlabs.puppetdb.testutils]
         [clojure.test]
