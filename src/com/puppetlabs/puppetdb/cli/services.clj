@@ -48,21 +48,20 @@
             [com.puppetlabs.puppetdb.command.dlo :as dlo]
             [com.puppetlabs.puppetdb.query.population :as pop]
             [com.puppetlabs.jdbc :as pl-jdbc]
-            [com.puppetlabs.jetty :as jetty]
             [com.puppetlabs.mq :as mq]
-            [puppetlabs.kitchensink.core :as kitchensink]
             [clojure.java.jdbc :as sql]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
             [com.puppetlabs.cheshire :as json]
             [com.puppetlabs.puppetdb.http.server :as server]
-            [com.puppetlabs.puppetdb.config :as conf])
+            [com.puppetlabs.puppetdb.config :as conf]
+            [puppetlabs.kitchensink.core :as kitchensink]
+            [puppetlabs.trapperkeeper.core :as trapperkeeper])
   (:use [clojure.java.io :only [file]]
         [clj-time.core :only [ago secs minutes days]]
         [overtone.at-at :only (mk-pool interspaced)]
         [com.puppetlabs.time :only [to-secs to-millis parse-period format-period period?]]
         [com.puppetlabs.jdbc :only (with-transacted-connection)]
-        [puppetlabs.kitchensink.core :only (cli! with-error-delivery)]
         [com.puppetlabs.repl :only (start-repl)]
         [com.puppetlabs.puppetdb.scf.migrate :only [migrate!]]
         [com.puppetlabs.puppetdb.version :only [version update-info]]
@@ -231,50 +230,51 @@
   ;; nothing much to do here for now, but let's at least log that we're shutting down.
   (log/info "Shutdown request received; puppetdb exiting."))
 
+(defn- set-global-configuration!
+  [config]
+  {:pre  [(map? config)]
+   :post [(map? %)]}
+  (def configuration config)
+  config)
 
-(def supported-cli-options
-  [["-c" "--config" "Path to config.ini or conf.d directory (required)"]
-   ["-D" "--debug" "Enable debug mode" :default false :flag true]])
+(defn- process-config!
+  [config]
+  {:pre [(map? config)]}
+  (-> config
+      (conf/configure-commandproc-threads)
+      (conf/configure-database)
+      (conf/configure-gc-params)
+      (set-global-configuration!)))
 
-(def required-cli-options
-  [:config])
-
-(defn -main
-  [& args]
-  (let [[options _]                                (cli! args
-                                                      supported-cli-options
-                                                      required-cli-options)
-        initial-config                             {:debug (:debug options)}
-        {:keys [jetty database read-database global command-processing]
-            :as config}                            (conf/parse-config (:config options) initial-config)
-        product-name                               (normalize-product-name (get global :product-name "puppetdb"))
-        update-server                              (:update-server global "http://updates.puppetlabs.com/check-for-updates")
+(defn- puppetdb-services
+  "Used to be main"
+  [config add-ring-handler-fn join-fn]
+  (let [{:keys [jetty database read-database
+                global command-processing] :as config}  (process-config! config)
+        product-name                                    (normalize-product-name (get global :product-name "puppetdb"))
+        vardir                                          (conf/validate-vardir config)
+        update-server                                   (:update-server global "http://updates.puppetlabs.com/check-for-updates")
         ;; TODO: revisit the choice of 20000 as a default value for event queries
-        event-query-limit                          (get global :event-query-limit 20000)
-        write-db                                   (pl-jdbc/pooled-datasource database)
-        read-db                                    (pl-jdbc/pooled-datasource (assoc read-database :read-only? true))
-        gc-interval                                (get database :gc-interval)
-        node-ttl                                   (get database :node-ttl)
-        node-purge-ttl                             (get database :node-purge-ttl)
-        report-ttl                                 (get database :report-ttl)
-        dlo-compression-threshold                  (get command-processing :dlo-compression-threshold)
-        mq-dir                                     (str (file (:vardir global) "mq"))
-        discard-dir                                (file mq-dir "discarded")
-        globals                                    {:scf-read-db          read-db
-                                                    :scf-write-db         write-db
-                                                    :command-mq           {:connection-string mq-addr
-                                                                           :endpoint          mq-endpoint}
-                                                    :event-query-limit    event-query-limit
-                                                    :update-server        update-server
-                                                    :product-name         product-name}]
-
-
+        event-query-limit                               (get global :event-query-limit 20000)
+        write-db                                        (pl-jdbc/pooled-datasource database)
+        read-db                                         (pl-jdbc/pooled-datasource (assoc read-database :read-only? true))
+        gc-interval                                     (get database :gc-interval)
+        node-ttl                                        (get database :node-ttl)
+        node-purge-ttl                                  (get database :node-purge-ttl)
+        report-ttl                                      (get database :report-ttl)
+        dlo-compression-threshold                       (get command-processing :dlo-compression-threshold)
+        mq-dir                                          (str (file (:vardir global) "mq"))
+        discard-dir                                     (file mq-dir "discarded")
+        globals                                         {:scf-read-db          read-db
+                                                         :scf-write-db         write-db
+                                                         :command-mq           {:connection-string mq-addr
+                                                                                :endpoint          mq-endpoint}
+                                                         :event-query-limit    event-query-limit
+                                                         :update-server        update-server
+                                                         :product-name         product-name}]
 
     (when (version)
       (log/info (format "PuppetDB version %s" (version))))
-
-    ;; Add a shutdown hook where we can handle any required cleanup
-    (kitchensink/add-shutdown-hook! on-shutdown)
 
     ;; Ensure the database is migrated to the latest version, and warn if it's
     ;; deprecated. We do this in a single connection because HSQLDB seems to
@@ -300,7 +300,7 @@
           command-procs (let [nthreads (command-processing :threads)]
                           (log/info (format "Starting %d command processor threads" nthreads))
                           (vec (for [n (range nthreads)]
-                                 (future (with-error-delivery error
+                                 (future (kitchensink/with-error-delivery error
                                            (load-from-mq mq-addr mq-endpoint discard-dir {:db write-db
                                                                                           :catalog-hash-debug-dir (:catalog-hash-debug-dir global)}))))))
           updater       (future (maybe-check-for-updates product-name update-server read-db))
@@ -309,8 +309,9 @@
                                             (constantly true))
                               app         (server/build-app :globals globals :authorized? authorized?)]
                           (log/info "Starting query server")
-                          (future (with-error-delivery error
-                                    (jetty/run-jetty app jetty))))
+                          (future (kitchensink/with-error-delivery error
+                                    (add-ring-handler-fn app "")
+                                    (join-fn))))
           job-pool      (mk-pool)]
 
       ;; Pretty much this helper just knows our job-pool and gc-interval
@@ -344,3 +345,14 @@
 
         ;; Now throw the exception so the top-level handler will see it
         (throw exception)))))
+
+(trapperkeeper/defservice puppetdb-service
+  {:depends  [[:config-service get-config]
+              [:jetty-service add-ring-handler join]]
+   :provides [shutdown]}
+  (puppetdb-services (get-config) add-ring-handler join)
+  {:shutdown on-shutdown})
+
+(defn -main
+  [& args]
+  (trapperkeeper/bootstrap args))
