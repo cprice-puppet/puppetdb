@@ -74,7 +74,6 @@
 ;; The following functions setup interaction between the main
 ;; PuppetDB components.
 
-(def configuration nil)
 (def mq-addr "vm://localhost?jms.prefetchPolicy.all=1&create=false")
 (def mq-endpoint "com.puppetlabs.puppetdb.commands")
 (def send-command! (partial command/enqueue-command! mq-addr mq-endpoint))
@@ -230,29 +229,12 @@
   ;; nothing much to do here for now, but let's at least log that we're shutting down.
   (log/info "Shutdown request received; puppetdb exiting."))
 
-(defn- set-global-configuration!
-  [config]
-  {:pre  [(map? config)]
-   :post [(map? %)]}
-  (def configuration config)
-  config)
-
-(defn- process-config!
-  [config]
-  {:pre [(map? config)]}
-  (-> config
-      (conf/configure-commandproc-threads)
-      (conf/configure-database)
-      (conf/configure-gc-params)
-      (set-global-configuration!)))
-
 (defn- puppetdb-services
   "Used to be main"
   [config add-ring-handler-fn join-fn]
   (let [{:keys [jetty database read-database
-                global command-processing] :as config}  (process-config! config)
+                global command-processing] :as config}  (conf/process-config! config)
         product-name                                    (normalize-product-name (get global :product-name "puppetdb"))
-        vardir                                          (conf/validate-vardir config)
         update-server                                   (:update-server global "http://updates.puppetlabs.com/check-for-updates")
         ;; TODO: revisit the choice of 20000 as a default value for event queries
         event-query-limit                               (get global :event-query-limit 20000)
