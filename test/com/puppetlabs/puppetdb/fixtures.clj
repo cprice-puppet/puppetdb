@@ -65,7 +65,7 @@
                      (java.util.UUID/randomUUID)
                      ";hsqldb.tx=mvcc;sql.syntax_pgs=true")})
 
-(defn with-test-logging
+(defn with-test-logging-silenced
   "A fixture to temporarily redirect all logging output to an atom, rather than
   to the usual ConsoleAppender.  Useful for tests that are intentionally triggering
   error conditions, to prevent them from cluttering up the test output with log
