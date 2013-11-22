@@ -6,9 +6,9 @@
             [clojure.string :as string]
             [clojure.java.jdbc :as sql]
             [cheshire.core :as json]
-            [fs.core :as fs])
+            [fs.core :as fs]
+            [puppetlabs.trapperkeeper.testutils.logging :refer [with-log-output]])
   (:use     [com.puppetlabs.puppetdb.scf.storage-utils :only [sql-current-connection-table-names]]
-            [com.puppetlabs.testutils.logging :only [with-log-output]]
             [puppetlabs.kitchensink.core :only [parse-int excludes? keyset]]
             [clojure.test]
             [clojure.set :only [difference]]

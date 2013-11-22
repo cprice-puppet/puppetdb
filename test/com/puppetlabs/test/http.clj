@@ -4,7 +4,6 @@
             [puppetlabs.trapperkeeper.testutils.jetty :refer [with-test-jetty]])
   (:import [java.io InputStream StringWriter])
   (:use [com.puppetlabs.http]
-        [com.puppetlabs.testutils.logging]
         [com.puppetlabs.puppetdb.testutils]
         [clojure.test]
         [cheshire.core]
