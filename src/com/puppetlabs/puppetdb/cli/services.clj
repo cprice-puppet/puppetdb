@@ -56,7 +56,8 @@
             [com.puppetlabs.puppetdb.http.server :as server]
             [com.puppetlabs.puppetdb.config :as conf]
             [puppetlabs.kitchensink.core :as kitchensink]
-            [puppetlabs.trapperkeeper.core :as trapperkeeper])
+            [puppetlabs.trapperkeeper.core :refer [defservice]]
+            [puppetlabs.trapperkeeper.main :as trapperkeeper])
   (:use [clojure.java.io :only [file]]
         [clj-time.core :only [ago secs minutes days]]
         [overtone.at-at :only (mk-pool interspaced)]
@@ -328,7 +329,7 @@
         ;; Now throw the exception so the top-level handler will see it
         (throw exception)))))
 
-(trapperkeeper/defservice puppetdb-service
+(defservice puppetdb-service
   {:depends  [[:config-service get-config]
               [:jetty-service add-ring-handler join]]
    :provides [shutdown]}
@@ -337,4 +338,4 @@
 
 (defn -main
   [& args]
-  (trapperkeeper/bootstrap args))
+  (apply trapperkeeper/main args))
