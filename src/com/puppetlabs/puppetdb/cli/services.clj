@@ -56,8 +56,7 @@
             [com.puppetlabs.puppetdb.http.server :as server]
             [com.puppetlabs.puppetdb.config :as conf]
             [puppetlabs.kitchensink.core :as kitchensink]
-            [puppetlabs.trapperkeeper.core :refer [defservice]]
-            [puppetlabs.trapperkeeper.main :as trapperkeeper])
+            [puppetlabs.trapperkeeper.core :refer [defservice main]])
   (:use [clojure.java.io :only [file]]
         [clj-time.core :only [ago secs minutes days]]
         [overtone.at-at :only (mk-pool interspaced)]
@@ -226,15 +225,25 @@
 
 (defn on-shutdown
   "General cleanup when a shutdown request is received."
-  []
-  ;; nothing much to do here for now, but let's at least log that we're shutting down.
-  (log/info "Shutdown request received; puppetdb exiting."))
+  [command-procs updater web-app broker]
+  (log/info "Shutdown request received; puppetdb exiting.")
+  (doseq [cp command-procs]
+    (future-cancel cp))
+  (future-cancel updater)
+  (future-cancel web-app)
 
-(defn- puppetdb-services
-  "Used to be main"
-  [config add-ring-handler-fn join-fn]
+  ;; Stop the mq the old-fashioned way
+  (mq/stop-broker! broker)
+  (log/info "PuppetDB shutdown complete."))
+
+(defservice puppetdb-service
+  "Used to be -main"
+  {:depends  [[:config-service get-config]
+              [:webserver-service add-ring-handler join]
+              [:shutdown-service shutdown-on-error]]
+   :provides [shutdown]}
   (let [{:keys [jetty database read-database
-                global command-processing] :as config}  (conf/process-config! config)
+                global command-processing] :as config}  (conf/process-config! (get-config))
         product-name                                    (normalize-product-name (get global :product-name "puppetdb"))
         update-server                                   (:update-server global "http://updates.puppetlabs.com/check-for-updates")
         ;; TODO: revisit the choice of 20000 as a default value for event queries
@@ -270,8 +279,7 @@
     ;; Initialize database-dependent metrics
     (pop/initialize-metrics write-db)
 
-    (let [error         (promise)
-          broker        (try
+    (let [broker        (try
                           (log/info "Starting broker")
                           (mq/build-and-start-broker! "localhost" mq-dir command-processing)
                           (catch java.io.EOFException e
@@ -283,18 +291,23 @@
           command-procs (let [nthreads (command-processing :threads)]
                           (log/info (format "Starting %d command processor threads" nthreads))
                           (vec (for [n (range nthreads)]
-                                 (future (kitchensink/with-error-delivery error
-                                           (load-from-mq mq-addr mq-endpoint discard-dir {:db write-db
-                                                                                          :catalog-hash-debug-dir (:catalog-hash-debug-dir global)}))))))
+                                 (future (shutdown-on-error
+                                           #(load-from-mq
+                                              mq-addr
+                                              mq-endpoint
+                                              discard-dir
+                                              {:db write-db
+                                               :catalog-hash-debug-dir (:catalog-hash-debug-dir global)}))))))
           updater       (future (maybe-check-for-updates product-name update-server read-db))
           web-app       (let [authorized? (if-let [wl (jetty :certificate-whitelist)]
                                             (build-whitelist-authorizer wl)
                                             (constantly true))
                               app         (server/build-app :globals globals :authorized? authorized?)]
                           (log/info "Starting query server")
-                          (future (kitchensink/with-error-delivery error
-                                    (add-ring-handler-fn app "")
-                                    (join-fn))))
+                          (future (shutdown-on-error
+                                    #(do
+                                       (add-ring-handler app "")
+                                       (join)))))
           job-pool      (mk-pool)]
 
       ;; Pretty much this helper just knows our job-pool and gc-interval
@@ -317,25 +330,11 @@
           (log/warn (format "Starting %s server on port %d" type port))
           (start-repl type host port)))
 
-      (let [exception (deref error)]
-        (doseq [cp command-procs]
-          (future-cancel cp))
-        (future-cancel updater)
-        (future-cancel web-app)
-
-        ;; Stop the mq the old-fashioned way
-        (mq/stop-broker! broker)
-
-        ;; Now throw the exception so the top-level handler will see it
-        (throw exception)))))
-
-(defservice puppetdb-service
-  {:depends  [[:config-service get-config]
-              [:jetty-service add-ring-handler join]]
-   :provides [shutdown]}
-  (puppetdb-services (get-config) add-ring-handler join)
-  {:shutdown on-shutdown})
+      ;; Return a map containing our trapperkeeper service functions, which in
+      ;; our case is just a single shutdown function that it can use to clean
+      ;; things up when the container is shutting down.
+      {:shutdown (partial on-shutdown command-procs updater web-app broker)})))
 
 (defn -main
   [& args]
-  (apply trapperkeeper/main args))
+  (apply main args))
