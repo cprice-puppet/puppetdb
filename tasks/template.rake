@@ -3,7 +3,7 @@
 task :template => [ :clean ] do
    mkdir_p "ext/files/debian"
    # files for deb and rpm
-   erb "ext/templates/log4j.properties.erb", "ext/files/log4j.properties"
+   erb "ext/templates/logback.xml.erb", "ext/files/logback.xml"
    erb "ext/templates/config.ini.erb" , "ext/files/config.ini"
    erb "ext/templates/jetty.ini.erb",  "ext/files/jetty.ini"
    erb "ext/templates/repl.ini.erb",  "ext/files/repl.ini"
