@@ -15,9 +15,9 @@
            (s/trim out)
            "0.0-dev-build"))))))
 
-(def tk-version "0.3.0-SNAPSHOT")
+(def tk-version "0.3.0")
 (def tk-jetty9-version "0.3.0-SNAPSHOT")
-(def ks-version "0.5.0")
+(def ks-version "0.5.1")
 
 (defproject puppetdb (version-string)
   :description "Puppet-integrated catalog and fact storage"
